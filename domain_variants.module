@@ -1,0 +1,340 @@
+<?php
+
+/**
+ * @file
+ *  Implements a feature for domains that you can have multiple variants for the
+ *  same domain. For example: example.com/global and example.com/country/china
+ *  can be both variants for the example.com domain, and all the urls will be
+ *  overwritten to respect that prefix. Moreover, the variant can actually be
+ *  another domain, so for example another_domain.com/global/example can be a
+ *  variant of the some_domain.example.com
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function domain_variants_menu() {
+  $items['admin/structure/domain/variants'] = array(
+    'title' => 'Domain variants',
+    'access arguments' => array('administer domains'),
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'domain_variants_page',
+    'file' => 'domain_variants.admin.inc',
+  );
+  $items['admin/structure/domain/variants/%domain'] = array(
+    'title' => 'Edit domain variants',
+    'access arguments' => array('administer domains'),
+    'type' => MENU_CALLBACK,
+    'page callback' => 'domain_variants_admin',
+    'page arguments' => array(4),
+    'file' => 'domain_variants.admin.inc',
+  );
+  $items['admin/structure/domain/variants/%domain/edit/%domain_variants'] = array(
+    'title' => 'Edit domain variant',
+    'access callback' => 'domain_variants_edit_access',
+    'access arguments' => array(4, 6),
+    'type' => MENU_CALLBACK,
+    'page callback' => 'domain_variants_admin',
+    'page arguments' => array(4, 6),
+    'file' => 'domain_variants.admin.inc',
+  );
+  $items['admin/structure/domain/variants/%domain/delete/%domain_variants'] = array(
+    'title' => 'Delete domain variant',
+    'access callback' => 'domain_variants_edit_access',
+    'access arguments' => array(4, 6),
+    'type' => MENU_CALLBACK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('domain_variants_delete_confirm', 4, 6),
+    'file' => 'domain_variants.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * Access handler for editing and deleting domain variants.
+ */
+function domain_variants_edit_access($domain, $variant) {
+  // We must check that the domain id of the variant is correct.
+  if ($variant->domain_id != $domain['domain_id']) {
+    return FALSE;
+  }
+  return user_access('administer domains');
+}
+
+/**
+ * Implement hook_enable().
+ *
+ * Register domain_variants with domain bootstrap so we can use domain_bootstrap
+ * hooks.
+ */
+function domain_variants_enable() {
+  domain_bootstrap_register();
+}
+
+/**
+ * Implement hook_disable().
+ */
+function domain_variants_disable() {
+  domain_bootstrap_register();
+}
+
+/**
+ * Implements hook_domain_bootstrap_lookup().
+ */
+function domain_variants_domain_bootstrap_lookup($domain) {
+  global $_domain_variant;
+  $_domain_variant = NULL;
+  $full_path = $_SERVER['HTTP_HOST'] . '/' . ltrim($_GET['q'], '/');
+  $words = explode('?', $full_path);
+  // Make sure that the search path ends with "/" because we append a "/" to the
+  // path that we search for in the query. This is implemented like that to
+  // avoid the issues introduced by the variant prefixes. For example, if we
+  // have two variants: example.com/variant1 and example.com/variant11, because
+  // the first variant is basically a prefix of the second one, we may get the
+  // wrong variant when visiting example.com/variant11.
+  $search_path = rtrim($words[0], '/') . '/';
+  $query = db_select('domain_variants', 'variants');
+  $query->fields('variants', array('variant_id', 'domain_id', 'path'));
+  $query->addExpression('LOCATE(CONCAT(path, \'/\'), :path_search)', 'path_search', array(':path_search' => $search_path));
+  $query->having('path_search = 1');
+  $domain_variant = $query->execute()->fetch();
+  if ($domain_variant) {
+    $domain = db_select('domain', 'domain')->fields('domain', array('domain_id', 'subdomain', 'sitename', 'scheme', 'valid', 'weight', 'is_default', 'machine_name'))->condition('domain.domain_id', $domain_variant->domain_id)->execute()->fetch(PDO::FETCH_ASSOC);
+    // Fully load the domain variant into the global variable.
+    $_domain_variant = domain_variants_load($domain_variant->variant_id);
+    // We also have to remove all the parts that come after "/" from the variant
+    // so that the language for example will be handled correctly, and also, to
+    // avoid the menu not found errors.
+    $words = explode('/', $domain_variant->path);
+    array_shift($words);
+    if (count($words)) {
+      $search = implode('/', $words);
+      $q = rtrim($_GET['q'], '/') . '/';
+      // Remove the variant prefix, but only from the begining of the q value.
+      // For example, if we have the path: usa/en/blog/article-usa/ then only
+      // the first 'usa/' has to be removed (if the prefix of the domain is
+      // 'usa/').
+      if (strpos($q, $search . '/') === 0) {
+        $q = substr($q, strlen($search . '/'));
+      }
+      // Finally, restore the q and remove the trailing slash.
+      $_GET['q'] = rtrim($q, '/');
+    }
+  }
+  return $domain;
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function domain_variants_module_implements_alter(&$implementations, $hook) {
+  // The url_outbound_alter() hook must be called at the end of the queue,
+  // because the prefix for the domain variants has to be added at the end.
+  if ($hook == 'url_outbound_alter') {
+    $group = $implementations['domain_variants'];
+    unset($implementations['domain_variants']);
+    $implementations['domain_variants'] = $group;
+  }
+}
+
+/**
+ * Rewrites the URLs by prepending the domain_variant if needed.
+ */
+function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
+  global $_domain, $_domain_variant;
+
+  // Check first if we have to skip the rewrite. In some case (for example for
+  // external links) we do not want to have the domain variant.
+  if (!empty($options['skip_domain_variant']) || !empty($options['external'])) {
+    return;
+  }
+  // If we are on a domain variant, or if we have an domain_variant in the
+  // options
+  if (empty($options['domain_variant']) && !empty($_domain_variant)) {
+    $options['domain_variant'] = $_domain_variant;
+  }
+  if (!empty($options['domain_variant'])) {
+    if (!empty($options['domain_variant']->prefix)) {
+      $options['prefix'] = !empty($options['prefix']) ? $options['domain_variant']->prefix . '/' . $options['prefix'] : $options['domain_variant']->prefix . '/';
+    }
+    if (!empty($options['domain_variant']->base_url)) {
+      // @todo: at the moment, we use only http:// as scheme, but this could
+      // should maybe be changed to use the scheme of the domain.
+      $options['base_url'] = 'http://' . $options['domain_variant']->base_url;
+      $options['absolute'] = TRUE;
+    }
+  }
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function domain_variants_block_info() {
+  $blocks['domain_variants_switcher'] = array(
+    'info' => t('Domain variants switcher'),
+    // If the links in the block have to reflect the current page, then the
+    // block must not be cached.
+    'cache' => DRUPAL_CACHE_GLOBAL,
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function domain_variants_block_view($delta = '') {
+  $blocks = array();
+  switch ($delta) {
+    case 'domain_variants_switcher': {
+      $domains = domain_domains();
+      $blocks['content'] = drupal_get_form('domain_variants_switcher_form', $domains);
+      break;
+    }
+  }
+  return $blocks;
+}
+
+/**
+ * Form constructor for the domain variants switcher.
+ */
+function domain_variants_switcher_form($form, &$form_state, $domains) {
+  // We will print all the variants of a domain, if it has, otherwise
+  // we will print only the domain.
+  $domains = domain_domains();
+  $form['domain_variant_swicher']['#type'] = 'select';
+  // Construct the options.
+  $options = array();
+  foreach ($domains as $domain) {
+    // Skip the disabled domains, the domain_domains() returns all the results.
+    if (!$domain['valid']) {
+      continue;
+    }
+    // If the domain has variants, put them as options, otherwise put the domain
+    // itself.
+    if (!empty($domain['variants'])) {
+      foreach ($domain['variants'] as $variant) {
+        $options['v_' . $variant->variant_id] = $variant->name;
+        // Put also the hidden elements, the same concept as in the
+        // lang_dropdown module.
+        $form['v_' . $variant->variant_id] = array(
+          '#type' => 'hidden',
+          '#default_value' => check_plain(url(current_path(), array(
+            //'language' => $language_object,
+            'domain_variant' => $variant,
+          ))),
+        );
+      }
+    }
+    else {
+      $options['d_' . $domain['domain_id']] = $domain['sitename'];
+      $form['d_' . $domain['domain_id']] = array(
+        '#type' => 'hidden',
+        '#default_value' => check_plain(domain_check_scheme($domain['scheme'])
+            . '://' . $domain['subdomain'] . base_path() . current_path()),
+      );
+    }
+  }
+  $form['domain_variant_swicher']['#options'] = $options;
+  // Put the default value in the dropdown.
+  global $_domain;
+  if (!empty($_domain['variants'])) {
+    $variant = reset($_domain['variants']);
+    $form['domain_variant_swicher']['#default_value'] = 'v_' . $variant->variant_id;
+  }
+  else {
+    $form['domain_variant_swicher']['#default_value'] = 'd_' . $_domain['domain_id'];
+  }
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Go'),
+    '#attributes' => array('class' => array('ctools-auto-submit-click')),
+  );
+  $form['#attached']['js'] = array(ctools_attach_js('auto-submit'));
+  $form['#attributes'] = array('class' => array('ctools-auto-submit-full-form'));
+  return $form;
+}
+
+/**
+ * Submit handler for the domain variants switcher form.
+ */
+function domain_variants_switcher_form_submit(&$form, &$form_state) {
+  $redirect_url = $form_state['values'][$form_state['values']['domain_variant_swicher']];
+  $form_state['redirect'] = array($redirect_url, array('skip_domain_variant' => TRUE));
+}
+
+/**
+ * Loads a domain variant by its id.
+ */
+function domain_variants_load($variant_id, $reset = FALSE) {
+  static $variants = array();
+  if (!isset($variants[$variant_id]) || $reset) {
+    $variants[$variant_id] = db_select('domain_variants', 'dm')->fields('dm')->condition('dm.variant_id', $variant_id)->range(0, 1)->execute()->fetch();
+    if ($variants[$variant_id]) {
+      $words = explode('/', $variants[$variant_id]->path);
+      $base = array_shift($words);
+      if ($words) {
+        $variants[$variant_id]->prefix = implode('/', $words);
+        $variants[$variant_id]->base_url = $base;
+      }
+      // This function is called from the domain_variants_domain_bootstrap_lookup()
+      // and if we will call any module_invoke_all() here, then the registry will
+      // be saved wrong later during the request. Unless, we put the module_invoke
+      // outside of the static check, but then the static cache is not so useful
+      // anymore.
+      // As a hack at the moment, only the dv_georedirect module, if it exists,
+      // implements this hook, so call it directly until we find a solution.
+      if (module_exists('dv_georedirect') && function_exists('dv_georedirect_domain_variants_load')) {
+        dv_georedirect_domain_variants_load($variants[$variant_id]);
+      }
+    }
+  }
+  return $variants[$variant_id];
+}
+
+/**
+ * Saves a domain variant.
+ */
+function domain_variants_save($domain_variant) {
+  $update = array();
+  if (!$domain_variant->is_new && $domain_variant->variant_id) {
+    $update = array('variant_id');
+  }
+  // Insert the main details.
+  drupal_write_record('domain_variants', $domain_variant, $update);
+
+}
+
+/**
+ * Deletes a domain variant.
+ */
+function domain_variants_delete($variant_id) {
+  db_delete('domain_variants')->condition('variant_id', $variant_id)->execute();
+}
+
+/**
+ * Implements hook_domain_load().
+ */
+function domain_variants_domain_load(&$domain) {
+  // If the domain has variants, then attach them.
+  $query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'))->condition('variants.domain_id', $domain['domain_id']);
+  $result = $query->execute()->fetchAll();
+  foreach ($result as $data) {
+    $domain['variants'][$data->variant_id] = domain_variants_load($data->variant_id);
+  }
+}
+
+/**
+ * Returns all the domain variants that are assigned to a domain.
+ */
+function domain_variants_loockup($domain_id) {
+  static $variants = array();
+  if (!isset($variants[$domain_id])) {
+    $variants[$domain_id] = array();
+    $query = db_select('domain_variants', 'dm')->fields('dm', array('variant_id'))->condition('dm.domain_id', $domain_id);
+    $result = $query->execute()->fetchAll();
+    foreach ($result as $data) {
+      $variants[$domain_id][$data->variant_id] = domain_variants_load($data->variant_id);
+    }
+  }
+  return $variants[$domain_id];
+}

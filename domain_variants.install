@@ -1,0 +1,62 @@
+<?php
+
+/**
+ * @file
+ *  Install file for the Domain Variants module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function domain_variants_schema() {
+  $schema['domain_variants'] = array(
+    'description' => 'Base table for the domain variants.',
+    'fields' => array(
+      'variant_id' => array(
+        'description' => 'The primary identifier for a domain variant.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE
+      ),
+      'domain_id' => array(
+        'description' => 'The id of the domain to which it is assigned.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'path' => array(
+        'description' => 'The path of the domain variant.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => ''
+      ),
+      'name' => array(
+        'description' => 'The name of the variant.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => ''
+      ),
+    ),
+    'indexes' => array(
+      'domain_id' => array('domain_id'),
+    ),
+    'unique keys' => array('path' => array('path')),
+    'primary key' => array('variant_id'),
+  );
+  return $schema;
+}
+
+/**
+ * Implemenst hook_update_N().
+ *
+ * Adds the name field to the database.
+ */
+function domain_variants_update_7001() {
+  if (!db_field_exists('domain_variants', 'name')) {
+    $schema = domain_variants_schema();
+    db_add_field('domain_variants', 'name', $schema['domain_variants']['fields']['name']);
+  }
+}

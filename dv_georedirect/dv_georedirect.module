@@ -1,0 +1,204 @@
+<?php
+
+/**
+ * @file
+ *  Redirects the user, when he is on a domain without a variant, to the most
+ *  suitable domain variant, based on geo information and language.
+ */
+
+/**
+ * Implements hook_init().
+ */
+function dv_georedirect_init() {
+  $international_domain_id = 1;
+  $is_international_domain = isset($GLOBALS['_domain']['domain_id'])
+      && $GLOBALS['_domain']['domain_id'] == $international_domain_id;
+  $is_node_page = arg(0) == 'node' && !arg(2);
+  if ($is_international_domain && $is_node_page
+      && ($node = menu_get_object())
+      && !empty($node->domains)
+      && count($node->domains) == 1
+      && isset($node->domains[$international_domain_id])) {
+    // This is a node page which belongs to the International domain only, and
+    // we are on the International domain. Thus, if our JS will try to redirect
+    // to the local domain, the domain_node_redirect_init() will redirect user
+    // back to the International domain, and there will be a loop. Avoid this.
+    return;
+  }
+  drupal_add_js(array('dv_georedirect' => array(
+    'isInternationalDomain' => $is_international_domain,
+    'ajaxCallbackUrl' => url('dv-georedirect-get-domain-by-ip', array('absolute' => TRUE)),
+    'currentInternalPath' => current_path(),
+  )), 'setting');
+  drupal_add_js(drupal_get_path('module', 'dv_georedirect') . '/dv_georedirect.js');
+  drupal_add_library('system', 'jquery.cookie');
+}
+
+/**
+ * Implements hook_menu().
+ */
+function dv_georedirect_menu() {
+  $items = array();
+  $items['dv-georedirect-get-domain-by-ip'] = array(
+    'type' => MENU_CALLBACK,
+    'page callback' => 'dv_georedirect_get_domain_by_ip_ajax_callback',
+    'access callback' => TRUE,
+  );
+  return $items;
+}
+
+/**
+ * Ajax callback. Detects a country specific url by user IP, and prints it.
+ */
+function dv_georedirect_get_domain_by_ip_ajax_callback() {
+  $response = '';
+  $variants = dv_georedirect_search_variants();
+  if (!empty($variants)) {
+    $variant = reset($variants);
+    $path = !empty($_REQUEST['redirect_to']) && drupal_valid_path($_REQUEST['redirect_to'])
+        ? $_REQUEST['redirect_to'] : '<front>';
+    if ($variant = domain_variants_load($variant->variant_id)) {
+      $response = url($path, array('domain_variant' => $variant, 'absolute' => TRUE));
+    }
+  }
+  print($response);
+  exit();
+}
+
+/**
+ * Searches the best variant for an user, based on the geoip and language
+ * information.
+ */
+function dv_georedirect_search_variants() {
+  $country_code = '';
+  $lang_code = '';
+  // @todo: should this be static?
+  $variants = array();
+  // First, check if we can get the country of the user.
+  if (function_exists('geoip_record_by_name')) {
+    $geoip_array = geoip_record_by_name(ip_address());
+    $country_code = drupal_strtolower($geoip_array['country_code']);
+  }
+  else {
+    // This is just for testing, if there is not geoip_record_by_name()
+    // function available.
+    $country_code = isset($_GET['country_code']) ? $_GET['country_code'] : '';
+  }
+  // Second, get the language.
+  global $language;
+  // If we have the language enabled, then use it, otherwise get it from the
+  // browser.
+  if (!empty($language)) {
+    $lang_code = $language->language;
+  }
+  else {
+    // Our function to get the language from the browser is a bit different, it
+    // will not check any enabled languages.
+    module_load_include('inc', 'dv_georedirect');
+    $lang_code = dv_georedirect_locale_language_from_browser();
+  }
+  // The language must always be defined, so if empty, just initialize it with
+  // 'en'.
+  if (empty($lang_code)) {
+    $lang_code = 'en';
+  }
+  if (!empty($country_code)) {
+    // Search first of a domain variant that matches the country and the
+    // language.
+    $query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'));
+    $query->innerJoin('domain_variants_countries', 'countries', 'countries.variant_id = variants.variant_id');
+    $query->innerJoin('domain_variants_languages', 'languages', 'languages.variant_id = variants.variant_id');
+    $query->condition('countries.country_code', $country_code)->condition('languages.lang_code', $lang_code);
+    $result = $query->execute()->fetchAll();
+    // We found results, so we can put them in the variants array to be returned.
+    if (!empty($result)) {
+      $variants = $result;
+    }
+    else {
+      // If we did not find a match, then search only for a country match.
+      $query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'));
+      $query->innerJoin('domain_variants_countries', 'countries', 'countries.variant_id = variants.variant_id');
+      $query->condition('countries.country_code', $country_code);
+      $result = $query->execute()->fetchAll();
+      if (!empty($result)) {
+        $variants = $result;
+      }
+    }
+  }
+  // We did not find any variants, so just return the variants of the default
+  // domain.
+  if (empty($variants)) {
+    $query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'));
+    $query->innerJoin('domain', 'domain', 'domain.domain_id = variants.domain_id');
+    $query->condition('domain.is_default', 1);
+    $variants = $query->execute()->fetchAll();
+  }
+  return $variants;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for the domain_variants_form.
+ */
+function dv_georedirect_form_domain_variants_form_alter(&$form, &$form_state) {
+  // Add our elements only if we already have a domain variant, so only on the
+  // edit form.
+  if (!empty($form['variant_id']['#value'])) {
+    $variant = domain_variants_load($form['variant_id']['#value']);
+    $form['domain_variant']['dv_countries'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Countries'),
+      '#description' => t('Insert the ISO codes of the countries to which this domain variant is attached. Leave empty for all.'),
+      '#default_value' => !empty($variant->countries) ? implode(',', array_keys($variant->countries)) : '',
+    );
+    $form['domain_variant']['dv_languages'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Languages'),
+      '#description' => t('Insert the ISO codes of the languages to which this domain variant is attached. Leave empty for all.'),
+      '#default_value' => !empty($variant->languages) ? implode(',', array_keys($variant->languages)) : '',
+    );
+    // Add our submit handler.
+    $form['#submit'][] = 'dv_georedirect_domain_variants_submit';
+  }
+}
+
+/**
+ * Additional submit handler for the domain variants form.
+ *
+ * It saves the languages and countries for the domain variant.
+ */
+function dv_georedirect_domain_variants_submit(&$form, &$form_state) {
+  // First, delete all the langauges and countries of the domain variant.
+  db_delete('domain_variants_countries')->condition('variant_id', $form_state['values']['variant_id'])->execute();
+  db_delete('domain_variants_languages')->condition('variant_id', $form_state['values']['variant_id'])->execute();
+  // Add the countries.
+  if (!empty($form_state['values']['dv_countries'])) {
+    $words = explode(',', trim($form_state['values']['dv_countries']));
+    foreach ($words as $country_code) {
+      $object = new stdClass();
+      $object->variant_id = $form_state['values']['variant_id'];
+      $object->country_code = $country_code;
+      drupal_write_record('domain_variants_countries', $object);
+    }
+  }
+  // Add the languages.
+  if (!empty($form_state['values']['dv_languages'])) {
+    $words = explode(',', trim($form_state['values']['dv_languages']));
+    foreach ($words as $lang_code) {
+      $object = new stdClass();
+      $object->variant_id = $form_state['values']['variant_id'];
+      $object->lang_code = $lang_code;
+      drupal_write_record('domain_variants_languages', $object);
+    }
+  }
+}
+
+/**
+ * Implements hook_domain_variants_load().
+ *
+ * This is not yet a real hook, @see domain_variants_load().
+ */
+function dv_georedirect_domain_variants_load($variant) {
+  // Load the languages and countries, if they exist.
+  $variant->countries = db_select('domain_variants_countries', 'countries')->fields('countries')->condition('countries.variant_id', $variant->variant_id)->execute()->fetchAllAssoc('country_code');
+  $variant->languages = db_select('domain_variants_languages', 'languages')->fields('languages')->condition('languages.variant_id', $variant->variant_id)->execute()->fetchAllAssoc('lang_code');
+}

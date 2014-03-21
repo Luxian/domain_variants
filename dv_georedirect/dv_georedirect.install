@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * @file
+ *   Install file for the Domain Variants Georedirect module
+ */
+
+/**
+ * Implements hook_redirect_schema().
+ */
+function dv_georedirect_schema() {
+  $schema['domain_variants_countries'] = array(
+    'description' => 'Attaches country information to domains.',
+    'fields' => array(
+      'variant_id' => array(
+        'description' => 'The domain variant id.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'country_code' => array(
+        'description' => 'The country code.',
+        'type' => 'varchar',
+        'length' => 10,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'indexes' => array(
+      'country_code' => array('country_code'),
+    ),
+  );
+
+  $schema['domain_variants_languages'] = array(
+    'description' => 'Attaches language information to domains.',
+    'fields' => array(
+      'variant_id' => array(
+        'description' => 'The domain variant id.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'lang_code' => array(
+        'description' => 'The language code.',
+        'type' => 'varchar',
+        'length' => 10,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'indexes' => array(
+      'lang_code' => array('lang_code'),
+    ),
+  );
+  return $schema;
+}
