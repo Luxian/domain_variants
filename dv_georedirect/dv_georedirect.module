@@ -22,7 +22,19 @@ function dv_georedirect_init() {
     }
     if (!empty($variants)) {
       $variant = reset($variants);
-      drupal_goto('<front>', array('domain_variant' => $variant));
+      $options = array('domain_variant' => $variant);
+      // Check also if we can change the language.
+      if (!empty($variant->languages)) {
+        $languages = language_list();
+        foreach ($variant->languages as $lang_code => $lang) {
+          if (!empty($languages[$lang_code]) && $languages[$lang_code]->enabled == 1) {
+            $options['language'] = $languages[$lang_code];
+            // We found a language, so break here.
+            break;
+          }
+        }
+      }
+      drupal_goto('<front>', $options);
     }
   }
 }

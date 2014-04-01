@@ -167,6 +167,31 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
 }
 
 /**
+ * Returns the language of a variant.
+ *
+ * @param object $variant
+ *  The variant.
+ */
+function domain_variants_get_variant_language($variant) {
+  $enabled_languages = language_list('enabled');
+  $enabled_languages = $enabled_languages[1];
+  if (!empty($enabled_languages)) {
+    // First, if the variant has a "languages" attribute, check that one.
+    if (!empty($variant->languages)) {
+      foreach ($variant->languages as $key => $value) {
+        if (!empty($enabled_languages[$key])) {
+          // We found the language, so return it.
+          return $enabled_languages[$key];
+        }
+      }
+    }
+  }
+  global $language;
+  // If we are here, just return the current language.
+  return $language;
+}
+
+/**
  * Implements hook_block_info().
  */
 function domain_variants_block_info() {
@@ -219,7 +244,7 @@ function domain_variants_switcher_form($form, &$form_state, $domains) {
         $form['v_' . $variant->variant_id] = array(
           '#type' => 'hidden',
           '#default_value' => check_plain(url(current_path(), array(
-            //'language' => $language_object,
+            'language' => domain_variants_get_variant_language($variant),
             'domain_variant' => $variant,
           ))),
         );
@@ -238,8 +263,10 @@ function domain_variants_switcher_form($form, &$form_state, $domains) {
   // Put the default value in the dropdown.
   global $_domain;
   if (!empty($_domain['variants'])) {
-    $variant = reset($_domain['variants']);
-    $form['domain_variant_swicher']['#default_value'] = 'v_' . $variant->variant_id;
+    global $_domain_variant;
+    if (!empty($form['domain_variant_swicher']['#options']['v_' . $_domain_variant->variant_id])) {
+      $form['domain_variant_swicher']['#default_value'] = 'v_' . $_domain_variant->variant_id;
+    }
   }
   else {
     $form['domain_variant_swicher']['#default_value'] = 'd_' . $_domain['domain_id'];
