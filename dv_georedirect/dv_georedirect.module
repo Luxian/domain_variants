@@ -10,59 +10,21 @@
  * Implements hook_init().
  */
 function dv_georedirect_init() {
-  $international_domain_id = 1;
-  $is_international_domain = isset($GLOBALS['_domain']['domain_id'])
-      && $GLOBALS['_domain']['domain_id'] == $international_domain_id;
-  $is_node_page = arg(0) == 'node' && !arg(2);
-  if ($is_international_domain && $is_node_page
-      && ($node = menu_get_object())
-      && !empty($node->domains)
-      && count($node->domains) == 1
-      && isset($node->domains[$international_domain_id])) {
-    // This is a node page which belongs to the International domain only, and
-    // we are on the International domain. Thus, if our JS will try to redirect
-    // to the local domain, the domain_node_redirect_init() will redirect user
-    // back to the International domain, and there will be a loop. Avoid this.
-    return;
-  }
-  drupal_add_js(array('dv_georedirect' => array(
-    'isInternationalDomain' => $is_international_domain,
-    'ajaxCallbackUrl' => url('dv-georedirect-get-domain-by-ip', array('absolute' => TRUE)),
-    'currentInternalPath' => current_path(),
-  )), 'setting');
-  drupal_add_js(drupal_get_path('module', 'dv_georedirect') . '/dv_georedirect.js');
-  drupal_add_library('system', 'jquery.cookie');
-}
-
-/**
- * Implements hook_menu().
- */
-function dv_georedirect_menu() {
-  $items = array();
-  $items['dv-georedirect-get-domain-by-ip'] = array(
-    'type' => MENU_CALLBACK,
-    'page callback' => 'dv_georedirect_get_domain_by_ip_ajax_callback',
-    'access callback' => TRUE,
-  );
-  return $items;
-}
-
-/**
- * Ajax callback. Detects a country specific url by user IP, and prints it.
- */
-function dv_georedirect_get_domain_by_ip_ajax_callback() {
-  $response = '';
-  $variants = dv_georedirect_search_variants();
-  if (!empty($variants)) {
-    $variant = reset($variants);
-    $path = !empty($_REQUEST['redirect_to']) && drupal_valid_path($_REQUEST['redirect_to'])
-        ? $_REQUEST['redirect_to'] : '<front>';
-    if ($variant = domain_variants_load($variant->variant_id)) {
-      $response = url($path, array('domain_variant' => $variant, 'absolute' => TRUE));
+  global $_domain_variant;
+  // If we do not have any domain variant, then redirect to the best variant
+  // that we can find, based on geoip information and language.
+  // Do not redirect if we are not on the frontpage.
+  if (empty($_domain_variant) && drupal_is_front_page() && !drupal_is_cli()) {
+    // @todo: This should be implemented more modular.
+    $variants = dv_georedirect_search_variants();
+    foreach ($variants as $key => $value) {
+      $variants[$key] = domain_variants_load($value->variant_id);
+    }
+    if (!empty($variants)) {
+      $variant = reset($variants);
+      drupal_goto('<front>', array('domain_variant' => $variant));
     }
   }
-  print($response);
-  exit();
 }
 
 /**
