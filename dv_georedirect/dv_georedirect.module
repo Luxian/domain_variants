@@ -93,7 +93,6 @@ function dv_georedirect_search_variants() {
       $query->condition('countries.country_code', $country_code);
       $result = $query->execute()->fetchAll();
       if (!empty($result)) {
-        echo '<pre>'; print_r($result); die();
         $variants = $result;
       }
     }
