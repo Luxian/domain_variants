@@ -49,14 +49,11 @@ function dv_georedirect_search_variants() {
   // @todo: should this be static?
   $variants = array();
   // First, check if we can get the country of the user.
-  if (function_exists('geoip_record_by_name')) {
+  // Check first if we have to overwrite the country code from $_GET.
+  $country_code = isset($_GET['country_code']) ? $_GET['country_code'] : '';
+  if (empty($country_code) && function_exists('geoip_record_by_name')) {
     $geoip_array = geoip_record_by_name(ip_address());
     $country_code = drupal_strtolower($geoip_array['country_code']);
-  }
-  else {
-    // This is just for testing, if there is not geoip_record_by_name()
-    // function available.
-    $country_code = isset($_GET['country_code']) ? $_GET['country_code'] : '';
   }
   // Second, get the language.
   global $language;
@@ -76,6 +73,7 @@ function dv_georedirect_search_variants() {
   if (empty($lang_code)) {
     $lang_code = 'en';
   }
+
   if (!empty($country_code)) {
     // Search first of a domain variant that matches the country and the
     // language.
@@ -95,6 +93,7 @@ function dv_georedirect_search_variants() {
       $query->condition('countries.country_code', $country_code);
       $result = $query->execute()->fetchAll();
       if (!empty($result)) {
+        echo '<pre>'; print_r($result); die();
         $variants = $result;
       }
     }
