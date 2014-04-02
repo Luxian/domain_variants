@@ -351,6 +351,27 @@ function domain_variants_domain_load(&$domain) {
 }
 
 /**
+ * Implements hook_domain_path().
+ */
+function domain_variants_domain_path($domain_id, &$path, &$options, $original_path) {
+  global $_domain_variant;
+  // If we are trying to create a link to another domain, make sure we either
+  // just remove any variant from it, or use the correct variant.
+  if (!empty($_domain_variant)  && $domain_id != $_domain_variant->domain_id) {
+    // For the moment, we do not handle also the case with domain variants, so
+    // just use the original path when the domain path we have to show is not
+    // on the current domain.
+    // The source issue is this one: http://jira.amazeelabs.com/browse/VET-50
+    $path = $original_path;
+
+    /*$dom = domain_load($domain_id);
+    if (empty($dom['variants'])) {
+      $path = $original_path;
+    }*/
+  }
+}
+
+/**
  * Returns all the domain variants that are assigned to a domain.
  */
 function domain_variants_loockup($domain_id) {
