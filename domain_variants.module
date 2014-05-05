@@ -386,3 +386,25 @@ function domain_variants_loockup($domain_id) {
   }
   return $variants[$domain_id];
 }
+
+/**
+ * Implements hook_xmlsitemap_context_url_options_alter().
+ *
+ * Alter xml sitemap url to use domain variant instead of domain link. Requires
+ * domain_xmlsitemap module which provides domain context for domains
+ */
+function domain_variants_xmlsitemap_context_url_options_alter(array &$options, array $context) {
+  if (!empty($context['domain']) && module_exists('domain_variants')) {
+    // Search the domain variants for this domain
+    $domain_variant = db_select('domain_variants', 'dv')
+      ->fields('dv')
+      ->condition('dv.domain_id', $context['domain'])
+      ->range(0, 1)
+      ->execute()
+      ->fetchObject();
+
+    if ($domain_variant) {
+      $options['base_url'] = 'http://' . $domain_variant->path;
+    }
+  }
+}
