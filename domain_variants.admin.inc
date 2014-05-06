@@ -113,7 +113,7 @@ function domain_variants_form_submit(&$form, &$form_state) {
 /**
  * Confirmation form for deleting a domain variant.
  */
-function domain_variants_delete_confirm(&$form_state, $domain, $variant) {
+function domain_variants_delete_confirm($form, &$form_state, $domain, $variant) {
   $form = array();
   $form['domain_id'] = array(
     '#type' => 'value',
