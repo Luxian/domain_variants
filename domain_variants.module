@@ -199,7 +199,13 @@ function domain_variants_block_info() {
     'info' => t('Domain variants switcher'),
     // If the links in the block have to reflect the current page, then the
     // block must not be cached.
-    'cache' => DRUPAL_CACHE_GLOBAL,
+    'cache' => DRUPAL_NO_CACHE,
+  );
+  $blocks['domain_variants_links_switcher'] = array(
+    'info' => t('Domain variants links switcher'),
+    // If the links in the block have to reflect the current page, then the
+    // block must not be cached.
+    'cache' => DRUPAL_NO_CACHE,
   );
   return $blocks;
 }
@@ -211,8 +217,12 @@ function domain_variants_block_view($delta = '') {
   $blocks = array();
   switch ($delta) {
     case 'domain_variants_switcher': {
+      $blocks['content'] = drupal_get_form('domain_variants_switcher_form');
+      break;
+    }
+    case 'domain_variants_links_switcher': {
       $domains = domain_domains();
-      $blocks['content'] = drupal_get_form('domain_variants_switcher_form', $domains);
+      $blocks['content'] = domain_variants_links_switcher();
       break;
     }
   }
@@ -220,12 +230,51 @@ function domain_variants_block_view($delta = '') {
 }
 
 /**
+ * Shows the domain variants switcher as links.
+ *
+ * @param array $domains
+ *  An array with the domains.
+ */
+function domain_variants_links_switcher($domains = array()) {
+  if (empty($domains)) {
+    $domains = domain_domains();
+  }
+  $list = array();
+  foreach ($domains as $domain) {
+    // Skip the disabled domains, the domain_domains() returns all the results.
+    if (!$domain['valid']) {
+      continue;
+    }
+    // If the domain has variants, put them as options, otherwise put the domain
+    // itself.
+    if (!empty($domain['variants'])) {
+      foreach ($domain['variants'] as $variant) {
+        $class = array();
+        if (!empty($variant->languages)) {
+          $class = array_keys($variant->languages);
+        }
+        $list[] = array('data' => l($variant->name, current_path(), array('language' => domain_variants_get_variant_language($variant),'domain_variant' => $variant)), 'class' => $class);
+      }
+    }
+    else {
+      $list[] = l($domain['sitename'], domain_check_scheme($domain['scheme']). '://' . $domain['subdomain'] . base_path() . current_path());
+    }
+  }
+  return array(
+    '#theme' => 'item_list',
+    '#items' => $list,
+  );
+}
+
+/**
  * Form constructor for the domain variants switcher.
  */
-function domain_variants_switcher_form($form, &$form_state, $domains) {
+function domain_variants_switcher_form($form, &$form_state, $domains = array()) {
   // We will print all the variants of a domain, if it has, otherwise
   // we will print only the domain.
-  $domains = domain_domains();
+  if (empty($domains)) {
+    $domains = domain_domains();
+  }
   $form['domain_variant_swicher']['#type'] = 'select';
   // Construct the options.
   $options = array();
