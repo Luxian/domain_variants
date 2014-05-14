@@ -249,6 +249,11 @@ function domain_variants_links_switcher($domains = array()) {
     // itself.
     if (!empty($domain['variants'])) {
       foreach ($domain['variants'] as $variant) {
+        // If the languages are not set, it is possible that the variant was not
+        // fully loaded, so do it here.
+        if (!isset($variant->languages)) {
+          $variant = domain_variants_load($variant->variant_id, TRUE);
+        }
         $class = array();
         if (!empty($variant->languages)) {
           $class = array_keys($variant->languages);
