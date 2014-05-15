@@ -221,7 +221,6 @@ function domain_variants_block_view($delta = '') {
       break;
     }
     case 'domain_variants_links_switcher': {
-      $domains = domain_domains();
       $blocks['content'] = domain_variants_links_switcher();
       break;
     }
@@ -236,10 +235,11 @@ function domain_variants_block_view($delta = '') {
  *  An array with the domains.
  */
 function domain_variants_links_switcher($domains = array()) {
+  global $language_url, $_domain_variant;
   if (empty($domains)) {
     $domains = domain_domains();
   }
-  $list = array();
+  $links = array();
   foreach ($domains as $domain) {
     // Skip the disabled domains, the domain_domains() returns all the results.
     if (!$domain['valid']) {
@@ -258,16 +258,25 @@ function domain_variants_links_switcher($domains = array()) {
         if (!empty($variant->languages)) {
           $class = array_keys($variant->languages);
         }
-        $list[] = array('data' => l($variant->name, current_path(), array('language' => domain_variants_get_variant_language($variant),'domain_variant' => $variant)), 'class' => $class);
+        $path = current_path();
+        $lang = domain_variants_get_variant_language($variant);
+        // Add the active class.
+        if (($path == $_GET['q'] || ($path == '<front>' && drupal_is_front_page()))
+            && (empty($lang) || $lang->language == $language_url->language)
+            && (empty($_domain_variant) || $_domain_variant->variant_id == $variant->variant_id)) {
+          $class[] = 'active';
+        }
+        $links[] = array('data' => l($variant->name, $path, array('language' => $lang, 'domain_variant' => $variant)), 'class' => $class);
       }
     }
     else {
-      $list[] = l($domain['sitename'], domain_check_scheme($domain['scheme']). '://' . $domain['subdomain'] . base_path() . current_path());
+      $links[] = l($domain['sitename'], domain_check_scheme($domain['scheme']). '://' . $domain['subdomain'] . base_path() . current_path());
     }
   }
   return array(
     '#theme' => 'item_list',
-    '#items' => $list,
+    '#items' => $links,
+    '#attributes' => array('class' => array('language-switcher-locale-url')),
   );
 }
 
