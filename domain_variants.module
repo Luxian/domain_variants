@@ -255,8 +255,8 @@ function domain_variants_links_switcher($domains = array()) {
           $variant = domain_variants_load($variant->variant_id, TRUE);
         }
         $class = array();
-        if (!empty($variant->languages)) {
-          $class = array_keys($variant->languages);
+        if (!empty($variant->countries)) {
+          $class = array_keys($variant->countries);
         }
         $path = current_path();
         $lang = domain_variants_get_variant_language($variant);
