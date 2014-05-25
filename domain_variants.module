@@ -167,6 +167,35 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
 }
 
 /**
+ * Implements hook_i18n_translate_path_alter().
+ */
+function domain_variants_i18n_translate_path_alter(&$items, $path) {
+  global $_domain;
+  // Some translations may be available only on certain domains.
+  if (module_exists('domain_locale')) {
+    $domain_locale_list = domain_locale_list();
+    foreach ($items as $lang_code => $item) {
+      foreach ($domain_locale_list as $dom_id => $domain_locale) {
+        if (!empty($domain_locale[$lang_code])) {
+          if ($_domain['domain_id'] != $dom_id) {
+            $domain = domain_load($dom_id);
+            // Currently, only alter the URL if we have a variant.
+            if (!empty($domain['variants'])) {
+              $items[$lang_code]['domain_variant'] = reset($domain['variants']);
+            }
+            else {
+              // If the domain has no variants, then just skip them.
+              $items[$lang_code]['skip_domain_variant'] = TRUE;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
  * Returns the language of a variant.
  *
  * @param object $variant
@@ -448,4 +477,26 @@ function domain_variants_loockup($domain_id) {
     }
   }
   return $variants[$domain_id];
+}
+
+/**
+ * Implements hook_xmlsitemap_context_url_options_alter().
+ *
+ * Alter xml sitemap url to use domain variant instead of domain link. Requires
+ * domain_xmlsitemap module which provides domain context for domains
+ */
+function domain_variants_xmlsitemap_context_url_options_alter(array &$options, array $context) {
+  if (!empty($context['domain']) && module_exists('domain_variants')) {
+    // Search the domain variants for this domain
+    $domain_variant = db_select('domain_variants', 'dv')
+      ->fields('dv')
+      ->condition('dv.domain_id', $context['domain'])
+      ->range(0, 1)
+      ->execute()
+      ->fetchObject();
+
+    if ($domain_variant) {
+      $options['base_url'] = 'http://' . $domain_variant->path;
+    }
+  }
 }
