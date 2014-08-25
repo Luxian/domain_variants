@@ -7,36 +7,53 @@
  */
 
 /**
+ * Implements hook_menu().
+ */
+function dv_georedirect_menu() {
+  $items = array();
+  $items['admin/structure/domain/variants/georedirect'] = array(
+    'title' => 'GEO Redirect',
+    'access arguments' => array('administer domains'),
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dv_georedirect_config_form'),
+    'file' => 'dv_georedirect.admin.inc',
+  );
+  return $items;
+}
+
+/**
  * Implements hook_init().
  */
 function dv_georedirect_init() {
-  global $_domain_variant;
-  // If we do not have any domain variant, then redirect to the best variant
-  // that we can find, based on geoip information and language.
-  // Do not redirect if we are not on the frontpage.
-  if (empty($_domain_variant) && drupal_is_front_page() && !drupal_is_cli()) {
-    // @todo: This should be implemented more modular.
-    $variants = dv_georedirect_search_variants();
-    foreach ($variants as $key => $value) {
-      $variants[$key] = domain_variants_load($value->variant_id);
-    }
-    if (!empty($variants)) {
-      $variant = reset($variants);
-      $options = array('domain_variant' => $variant);
-      // Check also if we can change the language.
-      if (!empty($variant->languages)) {
-        $languages = language_list();
-        foreach ($variant->languages as $lang_code => $lang) {
-          if (!empty($languages[$lang_code]) && $languages[$lang_code]->enabled == 1) {
-            $options['language'] = $languages[$lang_code];
-            // We found a language, so break here.
-            break;
-          }
-        }
-      }
-      drupal_goto('<front>', $options);
-    }
+  $path = '<front>';
+  $options = array();
+  if (_dv_georedirect_setting('redirect_to') == 'same') {
+    $path = current_path();
+    $options['options'] = drupal_get_query_parameters();
   }
+  $http_response_code = 302;
+  if (_dv_georedirect_modify_redirect($path, $options, $http_response_code)) {
+    $dv_georedirect_drupal_goto_alter_enabled =& drupal_static('dv_georedirect_drupal_goto_alter_enabled');
+    $dv_georedirect_drupal_goto_alter_enabled = FALSE;
+    drupal_goto($path, $options, $http_response_code);
+  }
+}
+
+/**
+ * Implements drupal_goto_alter().
+ */
+function dv_georedirect_drupal_goto_alter(&$path, &$options, &$http_response_code) {
+  if (drupal_static('dv_georedirect_drupal_goto_alter_enabled', TRUE)) {
+    _dv_georedirect_modify_redirect($path, $options, $http_response_code);
+  }
+}
+
+/**
+ * Implements hook_redirect_alter().
+ */
+function dv_georedirect_redirect_alter(&$redirect) {
+  _dv_georedirect_modify_redirect($redirect->redirect, $redirect->redirect_options, $redirect->status_code);
 }
 
 /**
@@ -44,68 +61,78 @@ function dv_georedirect_init() {
  * information.
  */
 function dv_georedirect_search_variants() {
-  $country_code = '';
-  $lang_code = '';
-  // @todo: should this be static?
-  $variants = array();
+
   // First, check if we can get the country of the user.
   // Check first if we have to overwrite the country code from $_GET.
-  $country_code = isset($_GET['country_code']) ? $_GET['country_code'] : '';
-  if (empty($country_code) && function_exists('geoip_record_by_name')) {
-    $geoip_array = geoip_record_by_name(ip_address());
-    $country_code = drupal_strtolower($geoip_array['country_code']);
+  if (_dv_georedirect_setting('override_geoip_from_get')) {
+    $param_name = _dv_georedirect_setting('get_param_name');
+    $param_value = (isset($_GET[$param_name]) && is_scalar($_GET[$param_name])) ? $_GET[$param_name] : '';
+    if (_dv_georedirect_setting('get_param_represents') == 'country_iso_code') {
+      $country_code = $param_value;
+    }
+    elseif (_dv_georedirect_setting('get_param_represents') == 'domain_machine_name') {
+      $domain_id = db_select('domain', 'd')
+        ->condition('d.machine_name', $param_value)
+        ->fields('d', array('domain_id'))
+        ->execute()
+        ->fetchField();
+    }
   }
+  if (empty($country_code)) {
+    module_load_include('inc', 'domain_variants');
+    $country_code = _domain_variants_get_country_code_from_geoip();
+  }
+
   // Second, get the language.
   global $language;
   // If we have the language enabled, then use it, otherwise get it from the
   // browser.
   if (!empty($language)) {
-    $lang_code = $language->language;
+    $langcode = $language->language;
   }
   else {
     // Our function to get the language from the browser is a bit different, it
     // will not check any enabled languages.
-    module_load_include('inc', 'dv_georedirect');
-    $lang_code = dv_georedirect_locale_language_from_browser();
+    module_load_include('inc', 'domain_variants');
+    $langcode = reset(_domain_variants_locale_languages_from_browser());
   }
   // The language must always be defined, so if empty, just initialize it with
-  // 'en'.
-  if (empty($lang_code)) {
-    $lang_code = 'en';
+  // default one.
+  if (empty($langcode)) {
+    $langcode = language_default('language');
   }
 
-  if (!empty($country_code)) {
-    // Search first of a domain variant that matches the country and the
-    // language.
-    $query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'));
-    $query->innerJoin('domain_variants_countries', 'countries', 'countries.variant_id = variants.variant_id');
-    $query->innerJoin('domain_variants_languages', 'languages', 'languages.variant_id = variants.variant_id');
-    $query->condition('countries.country_code', $country_code)->condition('languages.lang_code', $lang_code);
-    $result = $query->execute()->fetchAll();
-    // We found results, so we can put them in the variants array to be returned.
-    if (!empty($result)) {
-      $variants = $result;
-    }
-    else {
-      // If we did not find a match, then search only for a country match.
-      $query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'));
-      $query->innerJoin('domain_variants_countries', 'countries', 'countries.variant_id = variants.variant_id');
-      $query->condition('countries.country_code', $country_code);
-      $result = $query->execute()->fetchAll();
-      if (!empty($result)) {
-        $variants = $result;
-      }
-    }
+  $base_query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'));
+  $base_query->innerJoin('domain_variants_countries', 'countries', 'countries.variant_id = variants.variant_id');
+  $base_query->innerJoin('domain_variants_languages', 'languages', 'languages.variant_id = variants.variant_id');
+  $base_query->innerJoin('domain', 'domain', 'domain.domain_id = variants.domain_id');
+
+  $conditions = array();
+  if (!empty($domain_id)) {
+    $conditions['variants.domain_id'] = $domain_id;
   }
+  if (!empty($country_code)) {
+    $conditions['variants.domain_id'] = $country_code;
+  }
+  $conditions['languages.lang_code'] = $langcode;
+
+  // Perform query decreasing the conditions count if there are no results.
+  while (!empty($conditions)) {
+    $query = clone $base_query;
+    foreach ($conditions as $field => $value) {
+      $query->condition($field, $value);
+    }
+    if ($result = $query->execute()->fetchAll()) {
+      return $result;
+    }
+    array_pop($conditions);
+  }
+
   // We did not find any variants, so just return the variants of the default
   // domain.
-  if (empty($variants)) {
-    $query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'));
-    $query->innerJoin('domain', 'domain', 'domain.domain_id = variants.domain_id');
-    $query->condition('domain.is_default', 1);
-    $variants = $query->execute()->fetchAll();
-  }
-  return $variants;
+  $query = clone $base_query;
+  $query->condition('domain.is_default', 1);
+  return $query->execute()->fetchAll();
 }
 
 /**
@@ -116,13 +143,18 @@ function dv_georedirect_form_domain_variants_form_alter(&$form, &$form_state) {
   // edit form.
   if (!empty($form['variant_id']['#value'])) {
     $variant = domain_variants_load($form['variant_id']['#value']);
-    $form['domain_variant']['dv_countries'] = array(
+    $form['domain_variant']['georedirect'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Geo Redirect'),
+      '#description' => t('These settings are used to automatically redirect user from the front page to the appropriate domain/language depending on browser settings and/or IP address.'),
+    );
+    $form['domain_variant']['georedirect']['dv_countries'] = array(
       '#type' => 'textfield',
       '#title' => t('Countries'),
       '#description' => t('Insert the ISO codes of the countries to which this domain variant is attached. Leave empty for all.'),
       '#default_value' => !empty($variant->countries) ? implode(',', array_keys($variant->countries)) : '',
     );
-    $form['domain_variant']['dv_languages'] = array(
+    $form['domain_variant']['georedirect']['dv_languages'] = array(
       '#type' => 'textfield',
       '#title' => t('Languages'),
       '#description' => t('Insert the ISO codes of the languages to which this domain variant is attached. Leave empty for all.'),
@@ -173,4 +205,74 @@ function dv_georedirect_domain_variants_load($variant) {
   // Load the languages and countries, if they exist.
   $variant->countries = db_select('domain_variants_countries', 'countries')->fields('countries')->condition('countries.variant_id', $variant->variant_id)->execute()->fetchAllAssoc('country_code');
   $variant->languages = db_select('domain_variants_languages', 'languages')->fields('languages')->condition('languages.variant_id', $variant->variant_id)->execute()->fetchAllAssoc('lang_code');
+}
+
+/**
+ * Proxies variable_get()/variable_set().
+ *
+ * If $name is "LIST", returns an array of available setting names.
+ */
+function _dv_georedirect_setting($name, $value = NULL) {
+  static $defaults = array(
+    'ensure_on' => 'front',
+    'exclude_admin_pages' => TRUE,
+    'redirect_to' => 'front',
+    'override_geoip_from_get' => TRUE,
+    'get_param_name' => 'country_code',
+    'get_param_represents' => 'country_iso_code',
+  );
+  if ($name === 'LIST') {
+    return array_keys($defaults);
+  }
+  $variable_name = "dv_georedirect_$name";
+  if ($value !== NULL) {
+    variable_set($variable_name, $value);
+  }
+  return variable_get($variable_name, (isset($defaults[$name]) ? $defaults[$name] : NULL));
+}
+
+/**
+ * Checks a redirect that is going to be performed, and corrects its
+ * domain-variant/language.
+ *
+ * @param string $path
+ * @param array $options
+ * @param int $http_response_code
+ *
+ * @return bool
+ *   Returns TRUE if redirect was modified, FALSE otherwise.
+ */
+function _dv_georedirect_modify_redirect(&$path, &$options, &$http_response_code) {
+  global $_domain_variant;
+  if (!empty($_domain_variant)) {
+    return FALSE;
+  }
+  if (!_domain_variant_is_plain_request()) {
+    return FALSE;
+  }
+  if (_dv_georedirect_setting('ensure_on') == 'front' && !drupal_is_front_page()) {
+    return FALSE;
+  }
+  if (_dv_georedirect_setting('ensure_on') == 'all' && _dv_georedirect_setting('exclude_admin_pages') && path_is_admin(current_path())) {
+    return FALSE;
+  }
+
+  // If we do not have any domain variant, then redirect to the best variant
+  // that we can find, based on geoip information and language.
+  $variants = dv_georedirect_search_variants();
+  foreach ($variants as $key => $value) {
+    $variants[$key] = domain_variants_load($value->variant_id);
+  }
+  if (!empty($variants)) {
+    $variant = reset($variants);
+    $options = array('domain_variant' => $variant);
+    // Check also if we need change the language.
+    $language = isset($options['language']) ? $options['language'] : $GLOBALS['language'];
+    if ($langcode = _domain_variant_check_language($variant->variant_id, $language->language)) {
+      $languages = language_list();
+      $options['language'] = $languages[$langcode];
+    }
+    return TRUE;
+  }
+  return FALSE;
 }

@@ -21,6 +21,11 @@ function domain_variants_menu() {
     'page callback' => 'domain_variants_page',
     'file' => 'domain_variants.admin.inc',
   );
+  $items['admin/structure/domain/variants/list'] = array(
+    'title' => 'List',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
   $items['admin/structure/domain/variants/%domain'] = array(
     'title' => 'Edit domain variants',
     'access arguments' => array('administer domains'),
@@ -48,6 +53,23 @@ function domain_variants_menu() {
     'file' => 'domain_variants.admin.inc',
   );
   return $items;
+}
+
+/**
+ * Implements hook_init().
+ */
+function domain_variants_init() {
+  global $_domain_variant, $language;
+  if (_domain_variant_is_plain_request() && !empty($_domain_variant)) {
+    module_load_include('inc', 'domain_variants');
+    if ($redirect_langcode = _domain_variant_check_language($_domain_variant->variant_id, $language->language)) {
+      $languages = language_list();
+      drupal_goto(current_path(), array(
+        'query' => drupal_get_query_parameters(),
+        'language' => $languages[$redirect_langcode],
+      ));
+    }
+  }
 }
 
 /**
@@ -616,4 +638,15 @@ function domain_variants_xmlsitemap_context() {
   }
 
   return array();
+}
+
+/**
+ * Detects whether current request is "plain".
+ */
+function _domain_variant_is_plain_request() {
+ return (
+   !drupal_is_cli()
+   && (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) != 'xmlhttprequest')
+   && in_array($_SERVER['REQUEST_METHOD'], array('GET', 'HEAD'))
+ );
 }
