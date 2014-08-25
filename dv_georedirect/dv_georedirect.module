@@ -67,6 +67,7 @@ function dv_georedirect_search_variants() {
   if (_dv_georedirect_setting('override_geoip_from_get')) {
     $param_name = _dv_georedirect_setting('get_param_name');
     $param_value = (isset($_GET[$param_name]) && is_scalar($_GET[$param_name])) ? $_GET[$param_name] : '';
+    unset($_GET[$param_name]);
     if (_dv_georedirect_setting('get_param_represents') == 'country_iso_code') {
       $country_code = $param_value;
     }
@@ -112,7 +113,7 @@ function dv_georedirect_search_variants() {
     $conditions['variants.domain_id'] = $domain_id;
   }
   if (!empty($country_code)) {
-    $conditions['variants.domain_id'] = $country_code;
+    $conditions['countries.country_code'] = $country_code;
   }
   $conditions['languages.lang_code'] = $langcode;
 
@@ -268,6 +269,7 @@ function _dv_georedirect_modify_redirect(&$path, &$options, &$http_response_code
     $options = array('domain_variant' => $variant);
     // Check also if we need change the language.
     $language = isset($options['language']) ? $options['language'] : $GLOBALS['language'];
+    module_load_include('inc', 'domain_variants');
     if ($langcode = _domain_variant_check_language($variant->variant_id, $language->language)) {
       $languages = language_list();
       $options['language'] = $languages[$langcode];
