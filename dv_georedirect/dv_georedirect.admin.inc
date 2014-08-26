@@ -23,15 +23,6 @@ function dv_georedirect_config_form($form, &$form_state) {
     ),
     '#default_value' => _dv_georedirect_setting('exclude_admin_pages'),
   );
-  $form['redirect_to'] = array(
-    '#type' => 'radios',
-    '#title' => t('Redirect to'),
-    '#options' => array(
-      'front' => t('front page'),
-      'same' => t('the same page'),
-    ),
-    '#default_value' => _dv_georedirect_setting('redirect_to'),
-  );
   $form['country_detection'] = array(
     '#type' => 'fieldset',
     '#title' => t('Country detection'),

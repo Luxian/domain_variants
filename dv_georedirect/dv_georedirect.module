@@ -26,12 +26,8 @@ function dv_georedirect_menu() {
  * Implements hook_init().
  */
 function dv_georedirect_init() {
-  $path = '<front>';
-  $options = array();
-  if (_dv_georedirect_setting('redirect_to') == 'same') {
-    $path = current_path();
-    $options['options'] = drupal_get_query_parameters();
-  }
+  $path = current_path();
+  $options = array('options' => drupal_get_query_parameters());
   $http_response_code = 302;
   if (_dv_georedirect_modify_redirect($path, $options, $http_response_code)) {
     $dv_georedirect_drupal_goto_alter_enabled =& drupal_static('dv_georedirect_drupal_goto_alter_enabled');
@@ -217,7 +213,6 @@ function _dv_georedirect_setting($name, $value = NULL) {
   static $defaults = array(
     'ensure_on' => 'front',
     'exclude_admin_pages' => TRUE,
-    'redirect_to' => 'front',
     'override_geoip_from_get' => TRUE,
     'get_param_name' => 'country_code',
     'get_param_represents' => 'country_iso_code',
