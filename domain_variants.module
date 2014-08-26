@@ -313,7 +313,8 @@ function domain_variants_links_switcher($domains = array()) {
         $lang = domain_variants_get_variant_language($variant);
         // Add the active class.
         if (($path == $_GET['q'] || ($path == '<front>' && drupal_is_front_page()))
-            && (empty($lang) || $lang->language == $language_url->language)
+            // @todo (alex): do we really need this language condition?
+            //&& (empty($lang) || $lang->language == $language_url->language)
             && (empty($_domain_variant) || $_domain_variant->variant_id == $variant->variant_id)) {
           $class[] = 'active';
         }
