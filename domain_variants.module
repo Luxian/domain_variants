@@ -21,6 +21,11 @@ function domain_variants_menu() {
     'page callback' => 'domain_variants_page',
     'file' => 'domain_variants.admin.inc',
   );
+  $items['admin/structure/domain/variants/list'] = array(
+    'title' => 'List',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
   $items['admin/structure/domain/variants/%domain'] = array(
     'title' => 'Edit domain variants',
     'access arguments' => array('administer domains'),
@@ -48,6 +53,23 @@ function domain_variants_menu() {
     'file' => 'domain_variants.admin.inc',
   );
   return $items;
+}
+
+/**
+ * Implements hook_init().
+ */
+function domain_variants_init() {
+  global $_domain_variant, $language;
+  if (_domain_variant_is_plain_request() && !empty($_domain_variant)) {
+    module_load_include('inc', 'domain_variants');
+    if ($redirect_langcode = _domain_variant_check_language($_domain_variant->variant_id, $language->language)) {
+      $languages = language_list();
+      drupal_goto(current_path(), array(
+        'query' => drupal_get_query_parameters(),
+        'language' => $languages[$redirect_langcode],
+      ));
+    }
+  }
 }
 
 /**
@@ -167,6 +189,60 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
 }
 
 /**
+ * Implements hook_i18n_translate_path_alter().
+ */
+function domain_variants_i18n_translate_path_alter(&$items, $path) {
+  global $_domain;
+  // Some translations may be available only on certain domains.
+  if (module_exists('domain_locale')) {
+    $domain_locale_list = domain_locale_list();
+    foreach ($items as $lang_code => $item) {
+      foreach ($domain_locale_list as $dom_id => $domain_locale) {
+        if (!empty($domain_locale[$lang_code])) {
+          if ($_domain['domain_id'] != $dom_id) {
+            $domain = domain_load($dom_id);
+            // Currently, only alter the URL if we have a variant.
+            if (!empty($domain['variants'])) {
+              $items[$lang_code]['domain_variant'] = reset($domain['variants']);
+            }
+            else {
+              // If the domain has no variants, then just skip them.
+              $items[$lang_code]['skip_domain_variant'] = TRUE;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Returns the language of a variant.
+ *
+ * @param object $variant
+ *  The variant.
+ */
+function domain_variants_get_variant_language($variant) {
+  $enabled_languages = language_list('enabled');
+  $enabled_languages = $enabled_languages[1];
+  if (!empty($enabled_languages)) {
+    // First, if the variant has a "languages" attribute, check that one.
+    if (!empty($variant->languages)) {
+      foreach ($variant->languages as $key => $value) {
+        if (!empty($enabled_languages[$key])) {
+          // We found the language, so return it.
+          return $enabled_languages[$key];
+        }
+      }
+    }
+  }
+  global $language;
+  // If we are here, just return the current language.
+  return $language;
+}
+
+/**
  * Implements hook_block_info().
  */
 function domain_variants_block_info() {
@@ -174,7 +250,13 @@ function domain_variants_block_info() {
     'info' => t('Domain variants switcher'),
     // If the links in the block have to reflect the current page, then the
     // block must not be cached.
-    'cache' => DRUPAL_CACHE_GLOBAL,
+    'cache' => DRUPAL_NO_CACHE,
+  );
+  $blocks['domain_variants_links_switcher'] = array(
+    'info' => t('Domain variants links switcher'),
+    // If the links in the block have to reflect the current page, then the
+    // block must not be cached.
+    'cache' => DRUPAL_NO_CACHE,
   );
   return $blocks;
 }
@@ -186,8 +268,11 @@ function domain_variants_block_view($delta = '') {
   $blocks = array();
   switch ($delta) {
     case 'domain_variants_switcher': {
-      $domains = domain_domains();
-      $blocks['content'] = drupal_get_form('domain_variants_switcher_form', $domains);
+      $blocks['content'] = drupal_get_form('domain_variants_switcher_form');
+      break;
+    }
+    case 'domain_variants_links_switcher': {
+      $blocks['content'] = domain_variants_links_switcher();
       break;
     }
   }
@@ -195,12 +280,67 @@ function domain_variants_block_view($delta = '') {
 }
 
 /**
+ * Shows the domain variants switcher as links.
+ *
+ * @param array $domains
+ *  An array with the domains.
+ */
+function domain_variants_links_switcher($domains = array()) {
+  global $language_url, $_domain_variant;
+  if (empty($domains)) {
+    $domains = domain_domains();
+  }
+  $links = array();
+  foreach ($domains as $domain) {
+    // Skip the disabled domains, the domain_domains() returns all the results.
+    if (!$domain['valid']) {
+      continue;
+    }
+    // If the domain has variants, put them as options, otherwise put the domain
+    // itself.
+    if (!empty($domain['variants'])) {
+      foreach ($domain['variants'] as $variant) {
+        // If the languages are not set, it is possible that the variant was not
+        // fully loaded, so do it here.
+        if (!isset($variant->languages)) {
+          $variant = domain_variants_load($variant->variant_id, TRUE);
+        }
+        $class = array();
+        if (!empty($variant->countries)) {
+          $class = array_keys($variant->countries);
+        }
+        $path = current_path();
+        $lang = domain_variants_get_variant_language($variant);
+        // Add the active class.
+        if (($path == $_GET['q'] || ($path == '<front>' && drupal_is_front_page()))
+            // @todo (alex): do we really need this language condition?
+            //&& (empty($lang) || $lang->language == $language_url->language)
+            && (empty($_domain_variant) || $_domain_variant->variant_id == $variant->variant_id)) {
+          $class[] = 'active';
+        }
+        $links[] = array('data' => l($variant->name, $path, array('language' => $lang, 'domain_variant' => $variant)), 'class' => $class);
+      }
+    }
+    else {
+      $links[] = l($domain['sitename'], domain_check_scheme($domain['scheme']). '://' . $domain['subdomain'] . base_path() . current_path());
+    }
+  }
+  return array(
+    '#theme' => 'item_list',
+    '#items' => $links,
+    '#attributes' => array('class' => array('language-switcher-locale-url')),
+  );
+}
+
+/**
  * Form constructor for the domain variants switcher.
  */
-function domain_variants_switcher_form($form, &$form_state, $domains) {
+function domain_variants_switcher_form($form, &$form_state, $domains = array()) {
   // We will print all the variants of a domain, if it has, otherwise
   // we will print only the domain.
-  $domains = domain_domains();
+  if (empty($domains)) {
+    $domains = domain_domains();
+  }
   $form['domain_variant_swicher']['#type'] = 'select';
   // Construct the options.
   $options = array();
@@ -219,7 +359,7 @@ function domain_variants_switcher_form($form, &$form_state, $domains) {
         $form['v_' . $variant->variant_id] = array(
           '#type' => 'hidden',
           '#default_value' => check_plain(url(current_path(), array(
-            //'language' => $language_object,
+            'language' => domain_variants_get_variant_language($variant),
             'domain_variant' => $variant,
           ))),
         );
@@ -238,8 +378,10 @@ function domain_variants_switcher_form($form, &$form_state, $domains) {
   // Put the default value in the dropdown.
   global $_domain;
   if (!empty($_domain['variants'])) {
-    $variant = reset($_domain['variants']);
-    $form['domain_variant_swicher']['#default_value'] = 'v_' . $variant->variant_id;
+    global $_domain_variant;
+    if (!empty($form['domain_variant_swicher']['#options']['v_' . $_domain_variant->variant_id])) {
+      $form['domain_variant_swicher']['#default_value'] = 'v_' . $_domain_variant->variant_id;
+    }
   }
   else {
     $form['domain_variant_swicher']['#default_value'] = 'd_' . $_domain['domain_id'];
@@ -324,6 +466,27 @@ function domain_variants_domain_load(&$domain) {
 }
 
 /**
+ * Implements hook_domain_path().
+ */
+function domain_variants_domain_path($domain_id, &$path, &$options, $original_path) {
+  global $_domain_variant;
+  // If we are trying to create a link to another domain, make sure we either
+  // just remove any variant from it, or use the correct variant.
+  if (!empty($_domain_variant)  && $domain_id != $_domain_variant->domain_id) {
+    // For the moment, we do not handle also the case with domain variants, so
+    // just use the original path when the domain path we have to show is not
+    // on the current domain.
+    // The source issue is this one: http://jira.amazeelabs.com/browse/VET-50
+    $path = $original_path;
+
+    /*$dom = domain_load($domain_id);
+    if (empty($dom['variants'])) {
+      $path = $original_path;
+    }*/
+  }
+}
+
+/**
  * Returns all the domain variants that are assigned to a domain.
  */
 function domain_variants_loockup($domain_id) {
@@ -337,4 +500,154 @@ function domain_variants_loockup($domain_id) {
     }
   }
   return $variants[$domain_id];
+}
+/**
+ * Implements hook_xmlsitemap_context_url_options_alter().
+ *
+ * Alter xml sitemap url to use domain variant instead of domain link. Requires
+ * domain_xmlsitemap module which provides domain context for domains
+ */
+function domain_variants_xmlsitemap_context_url_options_alter(array &$options, array $context) {
+  if (!empty($context['domain']) && !empty($context['domain_variant'][$context['domain']])) {
+    $options['domain_variant'] = domain_variants_load($context['domain_variant'][$context['domain']]);
+  }
+  else {
+    $options['skip_domain_variant'] = true;
+  }
+}
+
+/**
+ * Implements hook_xmlsitemap_context_info().
+ */
+function domain_variants_xmlsitemap_context_info() {
+  $context['domain_variant'] = array(
+    'label' => t('Domain variant'),
+    'default' => null,
+  );
+  return $context;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter() for xmlsitemap_sitemap_edit_form().
+ *
+ * Adds an option for selecting domain variants as part of xmlsitemap context.
+ */
+function domain_variants_form_xmlsitemap_sitemap_edit_form_alter(&$form, $form_state) {
+  // Disable this when domain_xml_sitemap is not enabled
+  if (!module_exists('domain_xmlsitemap')) {
+    return;
+  }
+
+  $domain_variants = array_keys(db_select('domain_variants', 'dv')
+    ->fields('dv', array('variant_id'))
+    ->execute()
+    ->fetchAllAssoc('variant_id'));
+
+  // Nothing to do if no variants available
+  if (empty($domain_variants)) {
+    return;
+  }
+
+  // Trick element order (in case this hook get called first)
+  // @todo: do it properly (with form #process maybe?)
+  if (!isset($form['context']['domain'])) {
+    $form['context']['domain'] = array();
+  }
+
+  // Create the form element for selecting domain variants
+  $form['context']['domain_variant'] = array();
+  $form_element = &$form['context']['domain_variant'];
+
+  // Start by adding options grouped by domain id
+  foreach($domain_variants as $variant_id) {
+    $domain_variant = domain_variants_load($variant_id);
+    $domain_id = $domain_variant->domain_id;
+
+    $form_element[$domain_id]['#options'][$variant_id] = $domain_variant->path;
+  }
+
+  // Expand form element for each domain id (title + other Form API attributes)
+  foreach($form_element as $domain_id => $variants_element) {
+    $domain = domain_load($domain_id);
+
+    // Required attributes
+    $form_element[$domain_id]['#title'] = t('Domain variant to use for !domain', array('!domain' => $domain['sitename']));
+    $form_element[$domain_id]['#type'] = 'radios';
+
+    // Add an empty option to allow user to generate xmlsitemaps without variants
+    $form_element[$domain_id]['#options'] =
+      array(0 => $domain['subdomain'] . ' (no variant)')
+      + $form_element[$domain_id]['#options'];
+
+    // Show only the domain variants of the current domain
+    $form_element[$domain_id]['#states'] = array(
+      'visible' => array(
+        ':input[name="context[domain]"]' => array('value' => $domain_id),
+      ),
+    );
+
+    // Default value
+    if (isset($form['#sitemap']->context['domain_variant'][$domain_id])) {
+      $form_element[$domain_id]['#default_value'] =
+        $form['#sitemap']->context['domain_variant'][$domain_id];
+    }
+  }
+
+  array_unshift($form['#validate'], '_domain_variants_cleanup_xmlsitemap_sitemap_edit_form');
+}
+
+/**
+ * Cleanup submitted form values for xmlsitemap_sitemap_edit_form() by removing
+ * domain variant selection for domains other than selected one.
+ */
+function _domain_variants_cleanup_xmlsitemap_sitemap_edit_form(&$form, &$form_state) {
+  if (!empty($form_state['values']['context']['domain_variant'])) {
+    $domain_variants = &$form_state['values']['context']['domain_variant'];
+    $selected_domain = $form_state['values']['context']['domain'];
+
+    foreach($domain_variants as $domain_id => $value) {
+      if (!empty($value) && $domain_id != $selected_domain) {
+        $domain_variants[$domain_id] = null;
+      }
+    }
+
+    // Remove all domain id that are empty, except 0 (no domain variant)
+    // @see: http://php.net/manual/en/function.array-filter.php#111091
+    $domain_variants = array_filter($domain_variants, 'strlen');
+  }
+}
+
+/**
+ * Implements hook_xmlsitemap_context().
+ */
+function domain_variants_xmlsitemap_context() {
+  global $_domain, $_domain_variant;
+
+  if (!empty($_domain_variant)) {
+    return array(
+      'domain_variant' => array(
+        $_domain_variant->domain_id => $_domain_variant->variant_id
+      )
+    );
+  }
+  elseif (!empty($_domain)) {
+    return array(
+      'domain_variant' => array(
+        $_domain['domain_id'] => '0', // STRING OR HASH WILL NOT MATCH
+      ),
+    );
+  }
+
+  return array();
+}
+
+/**
+ * Detects whether current request is "plain".
+ */
+function _domain_variant_is_plain_request() {
+ return (
+   !drupal_is_cli()
+   && (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) != 'xmlhttprequest')
+   && in_array($_SERVER['REQUEST_METHOD'], array('GET', 'HEAD'))
+ );
 }

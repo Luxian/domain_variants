@@ -44,6 +44,7 @@ function domain_variants_table($variants) {
  * Form constructor for adding or updating a domain variant.
  */
 function domain_variants_form($form, &$form_state, $domain, $variant = NULL) {
+  module_load_include('inc', 'domain_variants');
   $form = array();
   if (isset($variant)) {
     $form['variant_id'] = array(
@@ -75,6 +76,41 @@ function domain_variants_form($form, &$form_state, $domain, $variant = NULL) {
     '#description' => t('The path of the domain variant using the full <em>path.example.com</em> format. Leave off the http:// and the trailing slash. Can only contain lowercase alphanumeric characters, dashes and a colon (if using alternative ports).'),
     '#default_value' => isset($variant) ? $variant->path : '',
   );
+
+  if (!empty($variant->variant_id)) {
+    $weight_class = drupal_html_class('weight-' . $variant->variant_id);
+    $form['domain_variant']['enabled_languages'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Enabled languages'),
+      '#tree' => TRUE,
+      '#pre_render' => array('_domain_variants_enabled_languages_pre_render'),
+      '#table_header' => array(
+        'title' => t('Language'),
+        'enabled' => t('Enabled'),
+        'weight' => t('Weight'),
+      ),
+      '#weight_class' => $weight_class,
+      '#description' => t('You can restrict available languages for this domain variant.<br />If user tries to access disallowed language, he will be redirected to the most appropriate language (that is defined by the order of the following table, and user\'s browser settings).<br />If all checkboxes unchecked, all languages are allowed.'),
+    );
+    $languages = language_list();
+    foreach (_domain_variants_get_domain_languages($variant->variant_id, 'all') as $langcode => $enabled) {
+      $form['domain_variant']['enabled_languages'][$langcode]['#langcode'] = $langcode;
+      $form['domain_variant']['enabled_languages'][$langcode]['#title'] = $languages[$langcode]->name;
+      $form['domain_variant']['enabled_languages'][$langcode]['#weight_class'] = $weight_class;
+      $form['domain_variant']['enabled_languages'][$langcode]['weight'] = array(
+        '#type' => 'textfield',
+        '#attributes' => array(
+          'class' => array($weight_class),
+        ),
+      );
+      $form['domain_variant']['enabled_languages'][$langcode]['enabled'] = array(
+        '#type' => 'checkbox',
+        '#title' => 'enabled',
+        '#default_value' => $enabled,
+      );
+    }
+  }
+
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save'),
@@ -100,6 +136,15 @@ function domain_variants_form_submit(&$form, &$form_state) {
   $domain_variant->is_new = TRUE;
   if (!empty($form_state['values']['variant_id'])) {
     $domain_variant = domain_variants_load($form_state['values']['variant_id']);
+
+    // Save allowed languages.
+    $cfg = variable_get('domain_variants_languages', array());
+    $cfg[$form_state['values']['variant_id']] = array();
+    uasort($form_state['values']['enabled_languages'], 'drupal_sort_weight');
+    foreach ($form_state['values']['enabled_languages'] as $langcode => $value) {
+      $cfg[$form_state['values']['variant_id']][$langcode] = (bool) $value['enabled'];
+    }
+    variable_set('domain_variants_languages', $cfg);
   }
   $domain_variant->path = $form_state['values']['path'];
   $domain_variant->domain_id = $form_state['values']['domain_id'];
@@ -113,7 +158,7 @@ function domain_variants_form_submit(&$form, &$form_state) {
 /**
  * Confirmation form for deleting a domain variant.
  */
-function domain_variants_delete_confirm(&$form_state, $domain, $variant) {
+function domain_variants_delete_confirm($form, &$form_state, $domain, $variant) {
   $form = array();
   $form['domain_id'] = array(
     '#type' => 'value',
@@ -160,4 +205,39 @@ function domain_variants_page() {
       '#rows' => $rows,
     ),
   );
+}
+
+/**
+ * Form element pre-render handler. Processes draggable options table.
+ */
+function _domain_variants_enabled_languages_pre_render($element) {
+  $rows = array();
+  foreach (element_children($element) as $key) {
+    unset($element[$key]['enabled']['#title']);
+    $rows[] = array(
+      'data' => array(
+        'title' => $element[$key]['#title'],
+        'enabled' => array(
+          'data' => $element[$key]['enabled'],
+        ),
+        'weight' => array(
+          'data' => $element[$key]['weight'],
+          'class' => array($element[$key]['#weight_class']),
+        ),
+      ),
+      'class' => array('draggable'),
+    );
+    unset($element[$key]);
+  };
+  $table_id = drupal_html_id('domain-variant-allowed-languages');
+  $element['table'] = array(
+    '#theme' => 'table',
+    '#header' => $element['#table_header'],
+    '#rows' => $rows,
+    '#attributes' => array(
+      'id' => $table_id,
+    ),
+  );
+  $element['#attached']['drupal_add_tabledrag'][] = array($table_id, 'order', 'sibling', $element['#weight_class']);
+  return $element;
 }
