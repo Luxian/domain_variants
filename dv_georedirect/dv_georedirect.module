@@ -27,7 +27,7 @@ function dv_georedirect_menu() {
  */
 function dv_georedirect_init() {
   $path = current_path();
-  $options = array('options' => drupal_get_query_parameters());
+  $options = array('query' => drupal_get_query_parameters());
   $http_response_code = 302;
   if (_dv_georedirect_modify_redirect($path, $options, $http_response_code)) {
     $dv_georedirect_drupal_goto_alter_enabled =& drupal_static('dv_georedirect_drupal_goto_alter_enabled');
@@ -261,7 +261,7 @@ function _dv_georedirect_modify_redirect(&$path, &$options, &$http_response_code
   }
   if (!empty($variants)) {
     $variant = reset($variants);
-    $options = array('domain_variant' => $variant);
+    $options['domain_variant'] = $variant;
     // Check also if we need change the language.
     $language = isset($options['language']) ? $options['language'] : $GLOBALS['language'];
     module_load_include('inc', 'domain_variants');
