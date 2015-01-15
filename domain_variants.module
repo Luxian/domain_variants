@@ -477,7 +477,11 @@ function domain_variants_domain_path($domain_id, &$path, &$options, $original_pa
     // just use the original path when the domain path we have to show is not
     // on the current domain.
     // The source issue is this one: http://jira.amazeelabs.com/browse/VET-50
-    $path = $original_path;
+    // Do it only for admin pages, because in some cases this can trigger a
+    // redirect loop (SIG-238).
+    if (strpos($original_path, 'admin/') === 0) {
+      $path = $original_path;
+    }
 
     /*$dom = domain_load($domain_id);
     if (empty($dom['variants'])) {
