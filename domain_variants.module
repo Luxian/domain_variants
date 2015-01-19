@@ -160,6 +160,17 @@ function domain_variants_module_implements_alter(&$implementations, $hook) {
 }
 
 /**
+ * Implements hook_pathologic_alter().
+ */
+function domain_variants_pathologic_alter(&$url_params, $parts, $cached_settings) {
+
+  // Do not process file URLs being corrected by the pathologic module.
+  if (!empty($cached_settings['is_file'])) {
+    $url_params['options']['skip_domain_variant'] = TRUE;
+  }
+}
+
+/**
  * Rewrites the URLs by prepending the domain_variant if needed.
  */
 function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
