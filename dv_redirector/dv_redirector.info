@@ -1,0 +1,7 @@
+name = Domain Variants Redirector
+description = Implements a Domain Variant Redirector component.
+core = 7.x
+dependencies[] = domain_variants
+dependencies[] = redirector
+
+files[] = classes/DVRedirectorComponent.inc

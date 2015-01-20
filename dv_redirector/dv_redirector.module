@@ -1,0 +1,19 @@
+<?php
+
+/**
+ * @file
+ *  Exposes a Domain Variant Redirector component.
+ */
+
+/**
+ * Implements hook_redirector_components().
+ *
+ */
+function dv_redirector_redirector_components() {
+  return array(
+    'dv_redirect' => array(
+      'class' => 'DVRedirectorComponent',
+      'weight' => 3,
+    ),
+  );
+}
