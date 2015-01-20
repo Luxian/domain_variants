@@ -160,6 +160,17 @@ function domain_variants_module_implements_alter(&$implementations, $hook) {
 }
 
 /**
+ * Implements hook_pathologic_alter().
+ */
+function domain_variants_pathologic_alter(&$url_params, $parts, $cached_settings) {
+
+  // Do not process file URLs being corrected by the pathologic module.
+  if (!empty($cached_settings['is_file'])) {
+    $url_params['options']['skip_domain_variant'] = TRUE;
+  }
+}
+
+/**
  * Rewrites the URLs by prepending the domain_variant if needed.
  */
 function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
@@ -477,7 +488,11 @@ function domain_variants_domain_path($domain_id, &$path, &$options, $original_pa
     // just use the original path when the domain path we have to show is not
     // on the current domain.
     // The source issue is this one: http://jira.amazeelabs.com/browse/VET-50
-    $path = $original_path;
+    // Do it only for admin pages, because in some cases this can trigger a
+    // redirect loop (SIG-238).
+    if (strpos($original_path, 'admin/') === 0) {
+      $path = $original_path;
+    }
 
     /*$dom = domain_load($domain_id);
     if (empty($dom['variants'])) {
