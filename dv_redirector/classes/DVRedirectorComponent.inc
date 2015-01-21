@@ -26,15 +26,18 @@ class DVRedirectorComponent extends RedirectorComponent {
    */
   public function getAvailableOptions($column_name = NULL) {
     $domains = domain_domains(TRUE);
-    $options = array();
+    $options['domain_variant'] = array();
     foreach ($domains as $domain) {
       // Skip the domain if it has no domain variants.
       if (empty($domain['variants'])) {
         continue;
       }
       foreach ($domain['variants'] as $variant) {
-        $options[$variant->variant_id] = $domain['sitename'] . ' (' . $variant->name . ')';
+        $options['domain_variant'][$variant->variant_id] = $domain['sitename'] . ' (' . $variant->name . ')';
       }
+    }
+    if (!empty($column_name)) {
+      return $options[$column_name];
     }
     return $options;
   }
@@ -57,9 +60,19 @@ class DVRedirectorComponent extends RedirectorComponent {
    */
   public function prepareRedirect($values, &$url, &$options) {
     if (!empty($values['domain_variant'])) {
-      $new_domain_variant = domain_variants_load($values['domain_variant']);
-      if (!empty($new_domain_variant)) {
-        $options['domain_variant'] = $new_domain_variant;
+      $new_domain_variant_id = NULL;
+      if (is_string($values['domain_variant']['value'])) {
+        $new_domain_variant_id= $values['domain_variant']['value'];
+      }
+      elseif (is_array($values['domain_variant']['value'])) {
+        $new_domain_variant_id = reset($values['domain_variant']['value']);
+      }
+      // Alter the domain variant of the options array.
+      if (!empty($new_domain_variant_id)) {
+        $new_domain_variant = domain_variants_load($new_domain_variant_id);
+        if (!empty($new_domain_variant)) {
+          $options['domain_variant'] = $new_domain_variant;
+        }
       }
     }
   }

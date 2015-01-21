@@ -449,7 +449,7 @@ function domain_variants_load($variant_id, $reset = FALSE) {
  */
 function domain_variants_save($domain_variant) {
   $update = array();
-  if (!$domain_variant->is_new && $domain_variant->variant_id) {
+  if (empty($domain_variant->is_new) && $domain_variant->variant_id) {
     $update = array('variant_id');
   }
   // Insert the main details.
