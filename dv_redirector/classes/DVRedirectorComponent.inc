@@ -68,7 +68,7 @@ class DVRedirectorComponent extends RedirectorComponent {
         $new_domain_variant_id = reset($values['domain_variant']['value']);
       }
       // Alter the domain variant of the options array.
-      if (!empty($new_domain_variant_id)) {
+      if (!empty($new_domain_variant_id) && $new_domain_variant_id != '--any--') {
         $new_domain_variant = domain_variants_load($new_domain_variant_id);
         if (!empty($new_domain_variant)) {
           $options['domain_variant'] = $new_domain_variant;
