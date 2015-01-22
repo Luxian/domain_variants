@@ -57,8 +57,11 @@ function domain_variants_menu() {
 
 /**
  * Implements hook_init().
+ *
+ * @todo: no need for this, we will have to cleanup the code for the 7.x-2.x
+ * branch.
  */
-function domain_variants_init() {
+/*function domain_variants_init() {
   global $_domain_variant, $language;
   if (_domain_variant_is_plain_request() && !empty($_domain_variant)) {
     module_load_include('inc', 'domain_variants');
@@ -70,7 +73,7 @@ function domain_variants_init() {
       ));
     }
   }
-}
+}*/
 
 /**
  * Access handler for editing and deleting domain variants.
