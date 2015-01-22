@@ -1,4 +1,0 @@
-name = Domain Variants Geo Redirect
-description = Redirects the user, when he is on a domain without a variant, to the most suitable domain variant, based on geo information and language.
-core = 7.x
-dependenices[] = domain_variants
