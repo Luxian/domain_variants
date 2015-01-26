@@ -49,7 +49,7 @@ class DVRedirectorComponent extends RedirectorComponent {
   public function getCurrentValue() {
     global $_domain_variant;
     if (!empty($_domain_variant)) {
-      return array('domain_variant' => $_domain_variant->variant_id);
+      return array('domain_variant' => $_domain_variant->variant_id, 'variant_name' =>$_domain_variant->name);
     }
     return array('domain_variant' => NULL);
   }
