@@ -2,3 +2,5 @@ name = Domain Variants
 description = Implements a feature for domains that you can have multiple variants for the same domain. For example: example.com/global and example.com/country/china can be both variants for the example.com domain, and all the urls will be overwritten to respect that prefix. Moreover, the variant can actually be another domain, so for example another_domain.com/global/example can be a variant of the some_domain.example.com
 core = 7.x
 dependencies[] = domain
+
+files[] = classes/SwitcherDomainVariantComponent.inc

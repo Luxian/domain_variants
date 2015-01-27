@@ -644,3 +644,16 @@ function _domain_variant_is_plain_request() {
    && in_array($_SERVER['REQUEST_METHOD'], array('GET', 'HEAD'))
  );
 }
+
+/**
+ * Implements hook_switcher_components().
+ *
+ * @todo: Document the hook.
+ */
+function domain_variants_switcher_components() {
+  return array(
+    'domain_variant' => array(
+      'class' => 'SwitcherDomainVariantComponent',
+    ),
+  );
+}
