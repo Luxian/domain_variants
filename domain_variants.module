@@ -657,3 +657,23 @@ function domain_variants_switcher_components() {
     ),
   );
 }
+
+/**
+ * Implements hook_display_cache_cache_keys_alter().
+ */
+function domain_variants_display_cache_cache_keys_alter(&$keys) {
+  if (count($keys) < 4) {
+    // The domain_variants module behaves as a cache granularity. If there are
+    // less than 4 keys ($entity_type, $entity, $view_mode, $element), then we
+    // are generating a base key for the cache clear, and we don't need to add
+    // our keys.
+    return;
+  }
+  global $_domain, $_domain_variant;
+  // Granularity style: use "d." prefix for domain and "dv." for domain variant.
+  /* @see drupal_render_cid_parts() */
+  $keys['domain_id'] = 'd.' . $_domain['domain_id'];
+  if (!empty($_domain_variant)) {
+    $keys['domain_variant_id'] = 'dv.' . $_domain_variant->variant_id;
+  }
+}
