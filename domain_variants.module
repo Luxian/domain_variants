@@ -182,33 +182,35 @@ function domain_variants_pathologic_alter(&$url_params, &$parts, $cached_setting
     //   1. Strip a domain variant prefix from the path and pass the domain
     //      variant object to the url() as the "domain_variant" option.
     //   2. Repeat the language detection.
-    static $all_domain_variants;
-    if (!isset($all_domain_variants)) {
-      $all_domain_variants = array();
-      $variant_ids = db_select('domain_variants', 'dv')
-        ->fields('dv', array('variant_id'))
-        ->execute()
-        ->fetchCol();
-      foreach ($variant_ids as $variant_id) {
-        $all_domain_variants[$variant_id] = domain_variants_load($variant_id);
-      }
-    }
-    foreach ($all_domain_variants as $domain_variant) {
-      if ($parts['host'] == $domain_variant->base_url &&
-        isset($domain_variant->prefix) &&
-        strpos($url_params['path'], $domain_variant->prefix . '/') === 0) {
-        $url_params['options']['domain_variant'] = $domain_variant;
-        $url_params['path'] = $parts['path'] = substr($url_params['path'], strlen($domain_variant->prefix) + 1);
-        // Now we do the same that _pathologic_replace() does.
-        if (module_exists('locale')) {
-          require_once DRUPAL_ROOT . '/includes/language.inc';
-          list($language_obj, $path) = language_url_split_prefix($parts['path'], language_list());
-          if ($language_obj) {
-            $url_params['path'] = $parts['path'] = $path;
-            $url_params['options']['language'] = $language_obj;
-          }
+    if (isset($parts['host'])) {
+      static $all_domain_variants;
+      if (!isset($all_domain_variants)) {
+        $all_domain_variants = array();
+        $variant_ids = db_select('domain_variants', 'dv')
+          ->fields('dv', array('variant_id'))
+          ->execute()
+          ->fetchCol();
+        foreach ($variant_ids as $variant_id) {
+          $all_domain_variants[$variant_id] = domain_variants_load($variant_id);
         }
-        break;
+      }
+      foreach ($all_domain_variants as $domain_variant) {
+        if ($parts['host'] == $domain_variant->base_url &&
+          isset($domain_variant->prefix) &&
+          strpos($url_params['path'], $domain_variant->prefix . '/') === 0) {
+          $url_params['options']['domain_variant'] = $domain_variant;
+          $url_params['path'] = $parts['path'] = substr($url_params['path'], strlen($domain_variant->prefix) + 1);
+          // Now we do the same that _pathologic_replace() does.
+          if (module_exists('locale')) {
+            require_once DRUPAL_ROOT . '/includes/language.inc';
+            list($language_obj, $path) = language_url_split_prefix($parts['path'], language_list());
+            if ($language_obj) {
+              $url_params['path'] = $parts['path'] = $path;
+              $url_params['options']['language'] = $language_obj;
+            }
+          }
+          break;
+        }
       }
     }
   }
