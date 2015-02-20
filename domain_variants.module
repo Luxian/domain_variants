@@ -64,8 +64,12 @@ function domain_variants_init() {
     module_load_include('inc', 'domain_variants');
     if ($redirect_langcode = _domain_variant_check_language($_domain_variant->variant_id, $language->language)) {
       $languages = language_list();
+      $query = drupal_get_query_parameters();
+      if (!empty($_GET['destination'])) {
+        unset($_GET['destination']);
+      }
       drupal_goto(current_path(), array(
-        'query' => drupal_get_query_parameters(),
+        'query' => $query,
         'language' => $languages[$redirect_langcode],
       ));
     }
