@@ -354,7 +354,7 @@ function domain_variants_links_switcher($domains = array()) {
   $links = array();
   foreach ($domains as $domain) {
     // Skip the disabled domains, the domain_domains() returns all the results.
-    if (!$domain['valid']) {
+    if (!$domain['valid'] && !user_access('access inactive domains')) {
       continue;
     }
     // If the domain has variants, put them as options, otherwise put the domain
@@ -407,7 +407,7 @@ function domain_variants_switcher_form($form, &$form_state, $domains = array()) 
   $options = array();
   foreach ($domains as $domain) {
     // Skip the disabled domains, the domain_domains() returns all the results.
-    if (!$domain['valid']) {
+    if (!$domain['valid'] && !user_access('access inactive domains')) {
       continue;
     }
     // If the domain has variants, put them as options, otherwise put the domain
