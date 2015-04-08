@@ -423,6 +423,7 @@ function domain_variants_switcher_form($form, &$form_state, $domains = array()) 
             'language' => domain_variants_get_variant_language($variant),
             'domain_variant' => $variant,
           ))),
+          '#domain_variant' => $variant,
         );
       }
     }
