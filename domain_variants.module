@@ -415,11 +415,15 @@ function domain_variants_switcher_form($form, &$form_state, $domains = array()) 
     if (!empty($domain['variants'])) {
       foreach ($domain['variants'] as $variant) {
         $options['v_' . $variant->variant_id] = $variant->name;
+        $path = current_path();
+        if ($path == variable_get('site_frontpage', 'node')) {
+          $path = '';
+        }
         // Put also the hidden elements, the same concept as in the
         // lang_dropdown module.
         $form['v_' . $variant->variant_id] = array(
           '#type' => 'hidden',
-          '#default_value' => check_plain(url(current_path(), array(
+          '#default_value' => check_plain(url($path, array(
             'language' => domain_variants_get_variant_language($variant),
             'domain_variant' => $variant,
           ))),
