@@ -100,8 +100,8 @@ function dv_georedirect_search_variants() {
   }
 
   $base_query = db_select('domain_variants', 'variants')->fields('variants', array('variant_id'));
-  $base_query->innerJoin('domain_variants_countries', 'countries', 'countries.variant_id = variants.variant_id');
-  $base_query->innerJoin('domain_variants_languages', 'languages', 'languages.variant_id = variants.variant_id');
+  $base_query->leftJoin('domain_variants_countries', 'countries', 'countries.variant_id = variants.variant_id');
+  $base_query->leftJoin('domain_variants_languages', 'languages', 'languages.variant_id = variants.variant_id');
   $base_query->innerJoin('domain', 'domain', 'domain.domain_id = variants.domain_id');
 
   if (!user_access('access inactive domains')) {
@@ -133,7 +133,28 @@ function dv_georedirect_search_variants() {
   // domain.
   $query = clone $base_query;
   $query->condition('domain.is_default', 1);
-  return $query->execute()->fetchAll();
+  $result = $query->execute()->fetchAll();
+
+  // Before returning the default variants, try to find one with appropriate
+  // language. If it was not found, try to exclude variants with inappropriate
+  // languages. But always leave at least one variant.
+  module_load_include('inc', 'domain_variants');
+  $langcodes = _domain_variants_locale_languages_from_browser();
+  foreach ($result as $key => $value) {
+    if (count($result) > 1) {
+      $variant = domain_variants_load($value->variant_id);
+      if (!empty($variant->languages)) {
+        if (array_intersect($langcodes, array_keys($variant->languages))) {
+          return array($key => $value);
+        }
+        else {
+          unset($result[$key]);
+        }
+      }
+    }
+  }
+
+  return $result;
 }
 
 /**
