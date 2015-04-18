@@ -64,19 +64,39 @@ function _domain_variants_locale_languages_from_browser() {
 }
 
 /**
- * Returns two-letters lowercase country ISO code detected from IP address.
+ * Returns two-letters lowercase country ISO code.
+ *
+ * The country code id detected from the following sources:
+ * 1. GeoIP extension (geoip_record_by_name() function)
+ * 2. "X-Geo-Country" HTTP header (Acquia hosting)
+ * 3. "geoip.country_code" HTTP header (Fastly)
  *
  * @return null|string
  */
-function _domain_variants_get_country_code_from_geoip() {
-  $geoip = array();
+function _domain_variants_get_country_code() {
+  $country_code = NULL;
+
   if (function_exists('geoip_record_by_name')) {
     $geoip = @geoip_record_by_name(ip_address());
+    if ($geoip && !empty($geoip['country_code'])) {
+      $country_code = $geoip['country_code'];
+    }
   }
-  if (isset($geoip['country_code'])) {
-    return drupal_strtolower($geoip['country_code']);
+  if (!$country_code) {
+    if (!empty($_SERVER['HTTP_X_GEO_COUNTRY']) && $_SERVER['HTTP_X_GEO_COUNTRY'] != 'AA') {
+      $country_code = $_SERVER['HTTP_X_GEO_COUNTRY'];
+    }
   }
-  return NULL;
+  if (!$country_code) {
+    if (!empty($_SERVER['HTTP_GEOIP_COUNTRY_CODE'])) {
+      $country_code = $_SERVER['HTTP_GEOIP_COUNTRY_CODE'];
+    }
+  }
+
+  if ($country_code) {
+    $country_code = drupal_strtolower(drupal_substr($country_code, 0, 2));
+  }
+  return $country_code;
 }
 
 /**

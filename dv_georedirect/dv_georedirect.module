@@ -77,7 +77,7 @@ function dv_georedirect_search_variants() {
   }
   if (empty($country_code)) {
     module_load_include('inc', 'domain_variants');
-    $country_code = _domain_variants_get_country_code_from_geoip();
+    $country_code = _domain_variants_get_country_code();
   }
 
   // Second, get the language.
