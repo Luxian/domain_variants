@@ -104,6 +104,10 @@ function dv_georedirect_search_variants() {
   $base_query->innerJoin('domain_variants_languages', 'languages', 'languages.variant_id = variants.variant_id');
   $base_query->innerJoin('domain', 'domain', 'domain.domain_id = variants.domain_id');
 
+  if (!user_access('access inactive domains')) {
+    $base_query->condition('domain.valid', 1);
+  }
+
   $conditions = array();
   if (!empty($domain_id)) {
     $conditions['variants.domain_id'] = $domain_id;
