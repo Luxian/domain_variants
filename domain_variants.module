@@ -370,7 +370,7 @@ function domain_variants_links_switcher($domains = array()) {
         if (!empty($variant->countries)) {
           $class = array_keys($variant->countries);
         }
-        $class[] = 'domain-variant-' . $variant->variant_id;
+        $class[] = 'domain-' . $variant->domain_id;
         $path = current_path();
         $lang = domain_variants_get_variant_language($variant);
         // Add the active class.
