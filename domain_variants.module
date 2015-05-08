@@ -56,23 +56,6 @@ function domain_variants_menu() {
 }
 
 /**
- * Implements hook_init().
- */
-function domain_variants_init() {
-  global $_domain_variant, $language;
-  if (_domain_variant_is_plain_request() && !empty($_domain_variant)) {
-    module_load_include('inc', 'domain_variants');
-    if ($redirect_langcode = _domain_variant_check_language($_domain_variant->variant_id, $language->language)) {
-      $languages = language_list();
-      drupal_goto(current_path(), array(
-        'query' => drupal_get_query_parameters(),
-        'language' => $languages[$redirect_langcode],
-      ));
-    }
-  }
-}
-
-/**
  * Access handler for editing and deleting domain variants.
  */
 function domain_variants_edit_access($domain, $variant) {
@@ -233,6 +216,11 @@ function domain_variants_i18n_translate_path_alter(&$items, $path) {
  *
  * @param object $variant
  *  The variant.
+ *
+ *  @todo: This is deprecated, we will not have languages on the variants
+ *  because we will delete the dv_georedirect module. The
+ *  domain_variants_links_switcher() and domain_variants_switcher_form() will
+ *  also have to be refactored.
  */
 function domain_variants_get_variant_language($variant) {
   $enabled_languages = language_list('enabled');
@@ -428,16 +416,6 @@ function domain_variants_load($variant_id, $reset = FALSE) {
       if ($words) {
         $variants[$variant_id]->prefix = implode('/', $words);
         $variants[$variant_id]->base_url = $base;
-      }
-      // This function is called from the domain_variants_domain_bootstrap_lookup()
-      // and if we will call any module_invoke_all() here, then the registry will
-      // be saved wrong later during the request. Unless, we put the module_invoke
-      // outside of the static check, but then the static cache is not so useful
-      // anymore.
-      // As a hack at the moment, only the dv_georedirect module, if it exists,
-      // implements this hook, so call it directly until we find a solution.
-      if (module_exists('dv_georedirect') && function_exists('dv_georedirect_domain_variants_load')) {
-        dv_georedirect_domain_variants_load($variants[$variant_id]);
       }
     }
   }
@@ -665,4 +643,17 @@ function _domain_variant_is_plain_request() {
    && (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) != 'xmlhttprequest')
    && in_array($_SERVER['REQUEST_METHOD'], array('GET', 'HEAD'))
  );
+}
+
+/**
+ * Implements hook_switcher_components().
+ *
+ * @todo: Document the hook.
+ */
+function domain_variants_switcher_components() {
+  return array(
+    'domain_variant' => array(
+      'class' => 'SwitcherDomainVariantComponent',
+    ),
+  );
 }
