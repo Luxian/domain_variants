@@ -296,6 +296,10 @@ function domain_variants_links_switcher($domains = array()) {
     if (!$domain['valid']) {
       continue;
     }
+    // Skip also the domains which should not appear in the switcher.
+    if (domain_variants_skip_switcher($domain['domain_id'])) {
+      continue;
+    }
     // If the domain has variants, put them as options, otherwise put the domain
     // itself.
     if (!empty($domain['variants'])) {
@@ -347,6 +351,10 @@ function domain_variants_switcher_form($form, &$form_state, $domains = array()) 
   foreach ($domains as $domain) {
     // Skip the disabled domains, the domain_domains() returns all the results.
     if (!$domain['valid']) {
+      continue;
+    }
+    // Skip also the domains which should not appear in the switcher.
+    if (domain_variants_skip_switcher($domain['domain_id'])) {
       continue;
     }
     // If the domain has variants, put them as options, otherwise put the domain
@@ -402,6 +410,41 @@ function domain_variants_switcher_form($form, &$form_state, $domains = array()) 
 function domain_variants_switcher_form_submit(&$form, &$form_state) {
   $redirect_url = $form_state['values'][$form_state['values']['domain_variant_swicher']];
   $form_state['redirect'] = array($redirect_url, array('skip_domain_variant' => TRUE));
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function domain_variants_form_domain_form_alter(&$form, &$form_state, $form_id) {
+  $skip_switcher = variable_get('domain_variants_skip_switcher', array());
+  $domain_id = $form['#domain']['domain_id'];
+  $form['skip_switcher'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Remove from the switcher'),
+    '#description' => t('Removes this domain from the switcher.'),
+    '#default_value' => (!empty($domain_id) && !empty($skip_switcher[$domain_id])) ? $skip_switcher[$domain_id] : NULL,
+  );
+  $form['#submit'][] = 'domain_variants_domain_form_submit';
+}
+
+/**
+ * Submit handler for the domain form.
+ */
+function domain_variants_domain_form_submit(&$form, &$form_state) {
+  $skip_switcher = variable_get('domain_variants_skip_switcher', array());
+  $skip_switcher[$form_state['values']['domain_id']] = $form_state['values']['skip_switcher'];
+  variable_set('domain_variants_skip_switcher', $skip_switcher);
+}
+
+/**
+ * Checks if the georedirect should be skipped for a domain id.
+ */
+function domain_variants_skip_switcher($domain_id) {
+  $skip_switcher = variable_get('domain_variants_skip_switcher', array());
+  if (!empty($skip_switcher[$domain_id])) {
+    return TRUE;
+  }
+  return FALSE;
 }
 
 /**
