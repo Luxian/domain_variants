@@ -194,6 +194,42 @@ function dv_georedirect_domain_variants_submit(&$form, &$form_state) {
 }
 
 /**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function dv_georedirect_form_domain_form_alter(&$form, &$form_state, $form_id) {
+  $skip_georedirect = _dv_georedirect_setting('skip_redirect');
+  $domain_id = $form['#domain']['domain_id'];
+  $form['skip_georedirect'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Skip Geo Redirect'),
+    '#description' => t('When enabled, the user will not be redirected to a different domain based on the country, if he accesses this domain.'),
+    '#default_value' => (!empty($domain_id) && !empty($skip_georedirect[$domain_id])) ? $skip_georedirect[$domain_id] : NULL,
+  );
+  $form['#submit'][] = 'dv_georedirect_domain_form_submit';
+  $form['submit']['#weight'] = 20;
+}
+
+/**
+ * Submit handler for the domain form.
+ */
+function dv_georedirect_domain_form_submit(&$form, &$form_state) {
+  $skip_georedirect = _dv_georedirect_setting('skip_redirect');
+  $skip_georedirect[$form_state['values']['domain_id']] = $form_state['values']['skip_georedirect'];
+  _dv_georedirect_setting('skip_redirect', $skip_georedirect);
+}
+
+/**
+ * Checks if the georedirect should be skipped for a domain id.
+ */
+function dv_georedirect_skip_redirect($domain_id) {
+  $skip_redirect = _dv_georedirect_setting('skip_redirect');
+  if (!empty($skip_redirect[$domain_id])) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
  * Implements hook_domain_variants_load().
  *
  * This is not yet a real hook, @see domain_variants_load().
@@ -216,6 +252,7 @@ function _dv_georedirect_setting($name, $value = NULL) {
     'override_geoip_from_get' => TRUE,
     'get_param_name' => 'country_code',
     'get_param_represents' => 'country_iso_code',
+    'skip_redirect' => array(),
   );
   if ($name === 'LIST') {
     return array_keys($defaults);
@@ -239,10 +276,17 @@ function _dv_georedirect_setting($name, $value = NULL) {
  *   Returns TRUE if redirect was modified, FALSE otherwise.
  */
 function _dv_georedirect_modify_redirect(&$path, &$options, &$http_response_code) {
-  global $_domain_variant;
+  global $_domain_variant, $_domain;
+
   if (!empty($_domain_variant)) {
     return FALSE;
   }
+  // If we already have a domain here for which we want to skip the redirect,
+  // then we skip it.
+  if (!empty($_domain) && dv_georedirect_skip_redirect($_domain['domain_id'])) {
+    return FALSE;
+  }
+
   if (!_domain_variant_is_plain_request()) {
     return FALSE;
   }
