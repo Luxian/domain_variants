@@ -241,3 +241,16 @@ function _domain_variants_enabled_languages_pre_render($element) {
   $element['#attached']['drupal_add_tabledrag'][] = array($table_id, 'order', 'sibling', $element['#weight_class']);
   return $element;
 }
+
+/**
+ * Domain variants settings form callback.
+ */
+function domain_variants_settings_form($form, &$form_state) {
+  $form['domain_variants_switcher_targets_frontpage'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Domain switcher always targets frontpage'),
+    '#description' => t('If checked, the domain switcher will always redirect users to the frontpage. Otherwise, it will try to redirect to the same page.'),
+    '#default_value' => variable_get('domain_variants_switcher_targets_frontpage'),
+  );
+  return system_settings_form($form);
+}

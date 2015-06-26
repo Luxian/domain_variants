@@ -52,6 +52,14 @@ function domain_variants_menu() {
     'page arguments' => array('domain_variants_delete_confirm', 4, 6),
     'file' => 'domain_variants.admin.inc',
   );
+  $items['admin/structure/domain/variants/settings'] = array(
+    'title' => 'Settings',
+    'access arguments' => array('administer domains'),
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('domain_variants_settings_form'),
+    'file' => 'domain_variants.admin.inc',
+  );
   return $items;
 }
 
@@ -357,6 +365,7 @@ function domain_variants_links_switcher($domains = array()) {
     if (!$domain['valid'] && !user_access('access inactive domains')) {
       continue;
     }
+    $path = variable_get('domain_variants_switcher_targets_frontpage') ? '' : current_path();
     // If the domain has variants, put them as options, otherwise put the domain
     // itself.
     if (!empty($domain['variants'])) {
@@ -371,7 +380,6 @@ function domain_variants_links_switcher($domains = array()) {
           $class = array_keys($variant->countries);
         }
         $class[] = 'domain-' . $variant->domain_id;
-        $path = current_path();
         $lang = domain_variants_get_variant_language($variant);
         // Add the active class.
         if (($path == $_GET['q'] || ($path == '<front>' && drupal_is_front_page()))
@@ -413,13 +421,13 @@ function domain_variants_switcher_form($form, &$form_state, $domains = array()) 
     }
     // If the domain has variants, put them as options, otherwise put the domain
     // itself.
+    $path = variable_get('domain_variants_switcher_targets_frontpage') ? '' : current_path();
+    if ($path == variable_get('site_frontpage', 'node')) {
+      $path = '';
+    }
     if (!empty($domain['variants'])) {
       foreach ($domain['variants'] as $variant) {
         $options['v_' . $variant->variant_id] = $variant->name;
-        $path = current_path();
-        if ($path == variable_get('site_frontpage', 'node')) {
-          $path = '';
-        }
         // Put also the hidden elements, the same concept as in the
         // lang_dropdown module.
         $form['v_' . $variant->variant_id] = array(
@@ -437,7 +445,7 @@ function domain_variants_switcher_form($form, &$form_state, $domains = array()) 
       $form['d_' . $domain['domain_id']] = array(
         '#type' => 'hidden',
         '#default_value' => check_plain(domain_check_scheme($domain['scheme'])
-            . '://' . $domain['subdomain'] . base_path() . current_path()),
+            . '://' . $domain['subdomain'] . base_path() . $path),
       );
     }
   }
