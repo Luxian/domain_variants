@@ -145,7 +145,7 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
 
   // Check first if we have to skip the rewrite. In some case (for example for
   // external links) we do not want to have the domain variant.
-  if (!empty($options['skip_domain_variant']) || !empty($options['external'])) {
+  if (!empty($options['skip_domain_variant']) || !empty($options['external']) || is_file(DRUPAL_ROOT . '/'. ltrim($path, '/'))) {
     return;
   }
   // If we are on a domain variant, or if we have an domain_variant in the
