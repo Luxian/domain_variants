@@ -357,6 +357,15 @@ function domain_variants_links_switcher($domains = array()) {
     if (!$domain['valid'] && !user_access('access inactive domains')) {
       continue;
     }
+    // If we are on the node view page, get the node domain settings.
+    $node_domains = NULL;
+    $args = arg();
+    if (count($args) === 2 && $args[0] == 'node' && ctype_digit($args[1])) {
+      $node = node_load($args[1]);
+      if (!empty($node->nid)) {
+        $node_domains = domain_get_node_domains($node->nid);
+      }
+    }
     // If the domain has variants, put them as options, otherwise put the domain
     // itself.
     if (!empty($domain['variants'])) {
@@ -372,6 +381,10 @@ function domain_variants_links_switcher($domains = array()) {
         }
         $class[] = 'domain-' . $variant->domain_id;
         $path = current_path();
+        // If node can't be viewed on this domain, redirect to the front page.
+        if ($node_domains !== NULL && empty($node_domains['domain_site']) && !in_array($variant->domain_id, $node_domains['domain_id'])) {
+          $path = '<front>';
+        }
         $lang = domain_variants_get_variant_language($variant);
         // Add the active class.
         if (($path == $_GET['q'] || ($path == '<front>' && drupal_is_front_page()))
