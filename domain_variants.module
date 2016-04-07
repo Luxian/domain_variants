@@ -196,7 +196,7 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
     }
     if (!empty($options['domain_variant']->base_url)) {
       // @todo: at the moment, we use only http:// as scheme, but this could
-      // should maybe be changed to use the scheme of the domain.
+      // maybe be changed to use the scheme of the domain.
       $options['base_url'] = 'http://' . $options['domain_variant']->base_url;
       $options['absolute'] = TRUE;
     }
@@ -367,8 +367,8 @@ function domain_variants_load($variant_id, $reset = FALSE) {
       $base = array_shift($words);
       if ($words) {
         $variants[$variant_id]->prefix = implode('/', $words);
-        $variants[$variant_id]->base_url = $base;
       }
+      $variants[$variant_id]->base_url = $base;
       // This function is called from the domain_variants_domain_bootstrap_lookup()
       // and if we will call any module_invoke_all() here, then the registry will
       // be saved wrong later during the request. Unless, we put the module_invoke
