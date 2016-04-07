@@ -141,17 +141,54 @@ function domain_variants_module_implements_alter(&$implementations, $hook) {
  * Rewrites the URLs by prepending the domain_variant if needed.
  */
 function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
-  global $_domain, $_domain_variant;
+  global $_domain, $_domain_variant, $language;
+
+  // We do not need to clear the static cache from outside, this is why we do
+  // not use the drupal_static() call here so that we can avoid a few hundreds
+  // of function calls.
+  static $domain_locale_exists;
+  static $domain_variant_for_language;
 
   // Check first if we have to skip the rewrite. In some case (for example for
   // external links) we do not want to have the domain variant.
   if (!empty($options['skip_domain_variant']) || !empty($options['external']) || is_file(DRUPAL_ROOT . '/'. ltrim($path, '/'))) {
     return;
   }
-  // If we are on a domain variant, or if we have an domain_variant in the
-  // options
-  if (empty($options['domain_variant']) && !empty($_domain_variant)) {
-    $options['domain_variant'] = $_domain_variant;
+
+  if (empty($options['domain_variant'])) {
+    // If the language of the url is different than the language of the current
+    // page, then we will try to get the correct variant for it.
+    if (!empty($options['language']) && $options['language']->language != $language->language) {
+      if (!isset($domain_locale_exists)) {
+        $domain_locale_exists = module_exists('domain_locale');
+      }
+      if ($domain_locale_exists) {
+        if (!isset($domain_variant_for_language[$options['language']->language])) {
+          $domains = domain_locale_get_domains_for_language($options['language']->language);
+          if (!empty($domains)) {
+            foreach ($domains as $domain) {
+              if (!empty($domain['variants'])) {
+                $domain_variant_for_language[$options['language']->language] = reset($domain['variants']);
+                // we found a variant, so break here.
+                break;
+              }
+            }
+          }
+        }
+        if (!empty($domain_variant_for_language[$options['language']->language])) {
+          $options['domain_variant'] = $domain_variant_for_language[$options['language']->language];
+        }
+        else {
+          // If we could not find a variant, then just skip it.
+          $options['skip_domain_variant'] = TRUE;
+        }
+      }
+    }
+
+    // As a fallback, use the current domain variant.
+    if (empty($options['domain_variant']) && !empty($_domain_variant) && empty($options['skip_domain_variant'])) {
+      $options['domain_variant'] = $_domain_variant;
+    }
   }
   if (!empty($options['domain_variant'])) {
     if (!empty($options['domain_variant']->prefix)) {
