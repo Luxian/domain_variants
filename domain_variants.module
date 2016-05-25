@@ -97,6 +97,10 @@ function domain_variants_domain_bootstrap_lookup($domain) {
   $query->fields('variants', array('variant_id', 'domain_id', 'path'));
   $query->addExpression('LOCATE(CONCAT(path, \'/\'), :path_search)', 'path_search', array(':path_search' => $search_path));
   $query->having('path_search = 1');
+  // This basically also fixes the issue with the prefixes above, by ordering
+  // the results by the length of the path (so we get the most specific results
+  // first).
+  $query->orderBy('CHAR_LENGTH(variants.path)', 'DESC');
   $domain_variant = $query->execute()->fetch();
   if ($domain_variant) {
     $domain = db_select('domain', 'domain')->fields('domain', array('domain_id', 'subdomain', 'sitename', 'scheme', 'valid', 'weight', 'is_default', 'machine_name'))->condition('domain.domain_id', $domain_variant->domain_id)->execute()->fetch(PDO::FETCH_ASSOC);
