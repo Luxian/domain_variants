@@ -380,7 +380,10 @@ function domain_variants_load($variant_id, $reset = FALSE) {
       // anymore.
       // As a hack at the moment, only the dv_georedirect module, if it exists,
       // implements this hook, so call it directly until we find a solution.
-      if (module_exists('dv_georedirect') && function_exists('dv_georedirect_domain_variants_load')) {
+      // Also, the 'module_exists' function does not exit when executing drush
+      // from remote (like drush @dev status).
+      //if (module_exists('dv_georedirect') && function_exists('dv_georedirect_domain_variants_load')) {
+      if (function_exists('dv_georedirect_domain_variants_load')) {
         dv_georedirect_domain_variants_load($variants[$variant_id]);
       }
     }
