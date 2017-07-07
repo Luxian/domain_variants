@@ -202,7 +202,8 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
       $scheme = isset($_domain['scheme']) && in_array($_domain['scheme'], array('http', 'https'))
         ? $_domain['scheme']
         : (!empty($GLOBALS['conf']['https']) ? 'https' : 'http');
-      $options['base_url'] = $scheme . '://' . $options['domain_variant']->base_url;      $options['absolute'] = TRUE;
+      $options['base_url'] = $scheme . '://' . $options['domain_variant']->base_url;
+      $options['absolute'] = TRUE;
     }
   }
 }
@@ -467,6 +468,8 @@ function domain_variants_loockup($domain_id) {
  * domain_xmlsitemap module which provides domain context for domains
  */
 function domain_variants_xmlsitemap_context_url_options_alter(array &$options, array $context) {
+  global $_domain;
+
   if (!empty($context['domain']) && module_exists('domain_variants')) {
     // Search the domain variants for this domain
     $domain_variant = db_select('domain_variants', 'dv')
@@ -477,7 +480,10 @@ function domain_variants_xmlsitemap_context_url_options_alter(array &$options, a
       ->fetchObject();
 
     if ($domain_variant) {
-      $options['base_url'] = 'http://' . $domain_variant->path;
+      $scheme = isset($_domain['scheme']) && in_array($_domain['scheme'], array('http', 'https'))
+        ? $_domain['scheme']
+        : (!empty($GLOBALS['conf']['https']) ? 'https' : 'http');
+      $options['base_url'] = $scheme . '://' . $domain_variant->path;
     }
   }
 }
