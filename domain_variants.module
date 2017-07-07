@@ -199,10 +199,10 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
       $options['prefix'] = !empty($options['prefix']) ? $options['domain_variant']->prefix . '/' . $options['prefix'] : $options['domain_variant']->prefix . '/';
     }
     if (!empty($options['domain_variant']->base_url)) {
-      // @todo: at the moment, we use only http:// as scheme, but this could
-      // maybe be changed to use the scheme of the domain.
-      $options['base_url'] = 'http://' . $options['domain_variant']->base_url;
-      $options['absolute'] = TRUE;
+      $scheme = isset($_domain['scheme']) && in_array($_domain['scheme'], array('http', 'https'))
+        ? $_domain['scheme']
+        : (!empty($GLOBALS['conf']['https']) ? 'https' : 'http');
+      $options['base_url'] = $scheme . '://' . $options['domain_variant']->base_url;      $options['absolute'] = TRUE;
     }
   }
 }
