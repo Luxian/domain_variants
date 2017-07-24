@@ -199,9 +199,16 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
       $options['prefix'] = !empty($options['prefix']) ? $options['domain_variant']->prefix . '/' . $options['prefix'] : $options['domain_variant']->prefix . '/';
     }
     if (!empty($options['domain_variant']->base_url)) {
-      $scheme = isset($_domain['scheme']) && in_array($_domain['scheme'], array('http', 'https'))
-        ? $_domain['scheme']
-        : (!empty($GLOBALS['conf']['https']) ? 'https' : 'http');
+      // Get the scheme from the domain associated with the link.
+      if (!empty($options['domain_variant']->domain_id) && ($domain = domain_load($options['domain_variant']->domain_id))) {
+        $scheme = $domain['scheme'];
+      }
+      // Fail to get the domain scheme then use the current domain / settings.
+      else {
+        $scheme = isset($_domain['scheme']) && in_array($_domain['scheme'], array('http', 'https'))
+          ? $_domain['scheme']
+          : (!empty($GLOBALS['conf']['https']) ? 'https' : 'http');
+      }
       $options['base_url'] = $scheme . '://' . $options['domain_variant']->base_url;
       $options['absolute'] = TRUE;
     }
@@ -480,9 +487,17 @@ function domain_variants_xmlsitemap_context_url_options_alter(array &$options, a
       ->fetchObject();
 
     if ($domain_variant) {
-      $scheme = isset($_domain['scheme']) && in_array($_domain['scheme'], array('http', 'https'))
-        ? $_domain['scheme']
-        : (!empty($GLOBALS['conf']['https']) ? 'https' : 'http');
+      // Get the scheme from the domain associated with the link.
+      if (!empty($domain_variant->domain_id) && ($domain = domain_load($domain_variant->domain_id))) {
+        $scheme = $domain['scheme'];
+      }
+      // Fail to get the domain scheme then use the current domain / settings.
+      else {
+        $scheme = isset($_domain['scheme']) && in_array($_domain['scheme'], array('http', 'https'))
+          ? $_domain['scheme']
+          : (!empty($GLOBALS['conf']['https']) ? 'https' : 'http');
+      }
+
       $options['base_url'] = $scheme . '://' . $domain_variant->path;
     }
   }
