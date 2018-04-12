@@ -471,11 +471,6 @@ function domain_variants_domain_path($domain_id, &$path, &$options, $original_pa
     if (strpos($original_path, 'admin/') === 0) {
       $path = $original_path;
     }
-
-    /*$dom = domain_load($domain_id);
-    if (empty($dom['variants'])) {
-      $path = $original_path;
-    }*/
   }
 }
 
