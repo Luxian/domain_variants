@@ -174,9 +174,17 @@ function domain_variants_url_outbound_alter(&$path, &$options, $original_path) {
       $options['prefix'] = !empty($options['prefix']) ? $options['domain_variant']->prefix . '/' . $options['prefix'] : $options['domain_variant']->prefix . '/';
     }
     if (!empty($options['domain_variant']->base_url)) {
-      // @todo: at the moment, we use only http:// as scheme, but this could
-      // should maybe be changed to use the scheme of the domain.
-      $options['base_url'] = 'http://' . $options['domain_variant']->base_url;
+      $protocol = 'http';
+
+      $destination_domain = explode('/', $options['domain_variant']->path);
+      $destination_domain = domain_lookup(NULL, $destination_domain[0]);
+      if (!empty($destination_domain['scheme'])) {
+        // Use the protocol from destination domain
+        $protocol = $destination_domain['scheme'];
+      }
+
+      $protocol = $protocol . '://';
+      $options['base_url'] = $protocol . $options['domain_variant']->base_url;
       $options['absolute'] = TRUE;
     }
   }
